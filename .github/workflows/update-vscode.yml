@@ -23,7 +23,7 @@ jobs:
         id: vscode
         run: |
           # Microsoft公式APIから最新版の情報を取得
-          VERSION=$(curl -fsSL 'https://update.code.visualstudio.com/api/releases/stable' | jq -r '.[0].version')
+          VERSION=$(curl -fsSL 'https://update.code.visualstudio.com/api/releases/stable' | jq -r '.[0]')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
           # ダウンロードURLを生成
