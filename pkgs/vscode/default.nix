@@ -43,8 +43,8 @@ let
   }.${system};
 
   # 最新版の情報（GitHub Actionsで自動更新される）
-  version = "1.108.1";
-  sha256 = "1dsvrf384qy3jfkwgkc7l0z3kyk17gw3v0rcb2gkx832k64n32x9";
+  version = "1.108.0";
+  sha256 = "0000000000000000000000000000000000000000000000000000";
 
 in
 stdenv.mkDerivation rec {
