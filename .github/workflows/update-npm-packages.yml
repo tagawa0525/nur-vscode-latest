@@ -19,36 +19,38 @@ jobs:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: Get latest claude-code version
         id: claude
         run: |
-          # npm registryから最新版を取得
-          VERSION=$(npm view @anthropic-ai/claude-code version)
+          # Google Cloud Storageから最新版を取得
+          BASE_URL="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases"
+          VERSION=$(curl -fsSL "$BASE_URL/latest")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-          # ダウンロードURLを生成
-          URL="https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-${VERSION}.tgz"
+          # マニフェストからチェックサムを取得
+          MANIFEST=$(curl -fsSL "$BASE_URL/$VERSION/manifest.json")
 
-          # SHA256ハッシュを計算（SRI形式）
-          TEMP_FILE=$(mktemp)
-          curl -fsSL "$URL" -o "$TEMP_FILE"
-          SHA256_BASE32=$(nix-hash --type sha256 --flat --base32 "$TEMP_FILE")
-          SHA256_SRI=$(nix hash convert --hash-algo sha256 --to base64 "$SHA256_BASE32")
-          rm "$TEMP_FILE"
+          # linux-x64のチェックサムを取得して変換
+          CHECKSUM_X64=$(echo "$MANIFEST" | jq -r '.platforms["linux-x64"].checksum')
+          SHA256_BASE32_X64=$(nix hash convert --hash-algo sha256 --from base16 "$CHECKSUM_X64")
+          SHA256_SRI_X64=$(nix hash convert --hash-algo sha256 --to base64 "$SHA256_BASE32_X64")
 
-          echo "sha256=$SHA256_SRI" >> $GITHUB_OUTPUT
+          # linux-arm64のチェックサムを取得して変換
+          CHECKSUM_ARM64=$(echo "$MANIFEST" | jq -r '.platforms["linux-arm64"].checksum')
+          SHA256_BASE32_ARM64=$(nix hash convert --hash-algo sha256 --from base16 "$CHECKSUM_ARM64")
+          SHA256_SRI_ARM64=$(nix hash convert --hash-algo sha256 --to base64 "$SHA256_BASE32_ARM64")
+
+          echo "sha256_x64=$SHA256_SRI_X64" >> $GITHUB_OUTPUT
+          echo "sha256_arm64=$SHA256_SRI_ARM64" >> $GITHUB_OUTPUT
           echo "Latest claude-code: $VERSION"
-          echo "SHA256: sha256-$SHA256_SRI"
+          echo "SHA256 x64: sha256-$SHA256_SRI_X64"
+          echo "SHA256 arm64: sha256-$SHA256_SRI_ARM64"
 
       - name: Update claude-code version
         run: |
           sed -i 's/version = ".*";/version = "${{ steps.claude.outputs.version }}";/' pkgs/claude-code/default.nix
-          sed -i 's|hash = "sha256-.*";|hash = "sha256-${{ steps.claude.outputs.sha256 }}";|' pkgs/claude-code/default.nix
+          sed -i '0,/hash = "sha256-.*";/s//hash = "sha256-${{ steps.claude.outputs.sha256_x64 }}";/' pkgs/claude-code/default.nix
+          sed -i '0,/hash = "sha256-.*";/s//hash = "sha256-${{ steps.claude.outputs.sha256_arm64 }}";/' pkgs/claude-code/default.nix
 
       - name: Build claude-code (test)
         run: |

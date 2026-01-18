@@ -17,6 +17,7 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [ autoPatchelfHook ];
 
   dontBuild = true;
+  dontStrip = true;  # バイナリを縮小しない
 
   installPhase = ''
     runHook preInstall
