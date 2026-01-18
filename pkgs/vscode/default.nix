@@ -28,6 +28,8 @@
 , systemd
 , xorg
 , libkrb5
+, webkitgtk_4_1
+, libsoup_3
 }:
 
 let
@@ -95,6 +97,8 @@ stdenv.mkDerivation rec {
     xorg.libxkbfile
     xorg.libxshmfence
     libkrb5
+    webkitgtk_4_1
+    libsoup_3
   ];
 
   runtimeDependencies = [
