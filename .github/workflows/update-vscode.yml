@@ -26,13 +26,19 @@ jobs:
           echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "Current VSCode: $CURRENT_VERSION"
 
-      - name: Get latest VSCode version
+      - name: Get latest VSCode version from Microsoft API
         id: vscode
         run: |
-          # Microsoft公式APIから最新版の情報を取得
-          VERSION=$(curl -fsSL 'https://update.code.visualstudio.com/api/releases/stable' | jq -r '.[0]')
+          # Microsoft公式APIから最新版のメタデータを取得（バージョン、SHA256ハッシュを含む）
+          METADATA=$(curl -fsSL 'https://update.code.visualstudio.com/api/update/linux-x64/stable/latest')
+
+          VERSION=$(echo "$METADATA" | jq -r '.productVersion')
+          SHA256_HEX=$(echo "$METADATA" | jq -r '.sha256hash')
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "sha256_hex=$SHA256_HEX" >> $GITHUB_OUTPUT
           echo "Latest VSCode: $VERSION"
+          echo "SHA256 (hex): $SHA256_HEX"
 
       - name: Compare versions
         id: compare
@@ -65,19 +71,12 @@ jobs:
             echo "::notice::Upgrading from $CURRENT to $NEW"
           fi
 
-      - name: Get SHA256 from Microsoft API
+      - name: Convert SHA256 to Nix base32 format
         if: steps.compare.outputs.comparison == '-1'
         id: hash
         run: |
-          # Microsoft公式APIからSHA256ハッシュを取得（ダウンロード不要）
-          METADATA=$(curl -fsSL 'https://update.code.visualstudio.com/api/update/linux-x64/stable/latest')
-
-          # hex形式のSHA256を取得
-          SHA256_HEX=$(echo "$METADATA" | jq -r '.sha256hash')
-          echo "SHA256 (hex): $SHA256_HEX"
-
-          # NixのBase32形式に変換
-          SHA256=$(nix --extra-experimental-features nix-command hash convert --hash-algo sha256 --to nix32 "$SHA256_HEX")
+          # 既に取得したhex形式のSHA256をNixのBase32形式に変換
+          SHA256=$(nix --extra-experimental-features nix-command hash convert --hash-algo sha256 --to nix32 "${{ steps.vscode.outputs.sha256_hex }}")
 
           echo "sha256=$SHA256" >> $GITHUB_OUTPUT
           echo "SHA256 (base32): $SHA256"
