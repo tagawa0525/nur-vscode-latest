@@ -13,6 +13,4 @@
 
   # パッケージ
   vscode = pkgs.callPackage ./pkgs/vscode { };
-  claude-code = pkgs.callPackage ./pkgs/claude-code { };
-  opencode = pkgs.callPackage ./pkgs/opencode { };
 }
