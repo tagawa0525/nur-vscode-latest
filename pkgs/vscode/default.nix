@@ -41,7 +41,7 @@ let
 
   # 最新版の情報（GitHub Actionsで自動更新される）
   version = "1.108.2";
-  sha256 = "0p8v4q5c63jw0kk4wd6zl8n0071iljr6wjmbbvknbjrsmdxmm826";
+  sha256 = "0000000000000000000000000000000000000000000000000000";
 
   executableName = "code";
   longName = "Visual Studio Code";
