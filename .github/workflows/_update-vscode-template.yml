@@ -37,12 +37,15 @@ jobs:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get current version
+      - name: Get current version and hash
         id: current
         run: |
           CURRENT_VERSION=$(grep 'version = ' ${{ inputs.package_path }} | sed 's/.*version = "\(.*\)";/\1/')
+          CURRENT_SHA256=$(grep 'sha256 = ' ${{ inputs.package_path }} | sed 's/.*sha256 = "\(.*\)";/\1/')
           echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "sha256=$CURRENT_SHA256" >> $GITHUB_OUTPUT
           echo "Current ${{ inputs.display_name }}: $CURRENT_VERSION"
+          echo "Current SHA256: $CURRENT_SHA256"
 
       - name: Get latest version from Microsoft API
         id: latest
@@ -79,18 +82,36 @@ jobs:
 
           echo "comparison=$COMPARISON" >> $GITHUB_OUTPUT
 
-          if [ "$COMPARISON" = "0" ]; then
-            echo "::notice::Version $NEW is already up-to-date"
-            exit 0
-          elif [ "$COMPARISON" = "1" ]; then
+          if [ "$COMPARISON" = "1" ]; then
             echo "::warning::Version $NEW appears to be a downgrade from $CURRENT"
             exit 1
-          else
+          elif [ "$COMPARISON" = "-1" ]; then
             echo "::notice::Upgrading from $CURRENT to $NEW"
+          else
+            echo "::notice::Version $NEW is up-to-date, checking hash..."
+          fi
+
+      - name: Check hash mismatch
+        if: steps.compare.outputs.comparison == '0'
+        id: check_hash
+        run: |
+          # Convert latest SHA256 to Nix base32 format for comparison
+          LATEST_SHA256=$(nix --extra-experimental-features nix-command hash convert --hash-algo sha256 --to nix32 "${{ steps.latest.outputs.sha256_hex }}")
+          CURRENT_SHA256="${{ steps.current.outputs.sha256 }}"
+
+          echo "Latest SHA256 (base32): $LATEST_SHA256"
+          echo "Current SHA256 (base32): $CURRENT_SHA256"
+
+          if [ "$LATEST_SHA256" != "$CURRENT_SHA256" ]; then
+            echo "::warning::Hash mismatch detected! Current: $CURRENT_SHA256, Expected: $LATEST_SHA256"
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+          else
+            echo "::notice::Hash is correct, no update needed"
+            echo "needs_update=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Convert SHA256 to Nix base32 format
-        if: steps.compare.outputs.comparison == '-1'
+        if: steps.compare.outputs.comparison == '-1' || (steps.compare.outputs.comparison == '0' && steps.check_hash.outputs.needs_update == 'true')
         id: hash
         run: |
           # Convert hex SHA256 to Nix base32 format
@@ -100,13 +121,13 @@ jobs:
           echo "SHA256 (base32): $SHA256"
 
       - name: Update version in default.nix
-        if: steps.compare.outputs.comparison == '-1'
+        if: steps.compare.outputs.comparison == '-1' || (steps.compare.outputs.comparison == '0' && steps.check_hash.outputs.needs_update == 'true')
         run: |
           sed -i 's/version = ".*";/version = "${{ steps.latest.outputs.version }}";/' ${{ inputs.package_path }}
           sed -i 's/sha256 = ".*";/sha256 = "${{ steps.hash.outputs.sha256 }}";/' ${{ inputs.package_path }}
 
       - name: Build package (test)
-        if: steps.compare.outputs.comparison == '-1'
+        if: steps.compare.outputs.comparison == '-1' || (steps.compare.outputs.comparison == '0' && steps.check_hash.outputs.needs_update == 'true')
         id: build
         continue-on-error: true
         run: |
@@ -117,7 +138,7 @@ jobs:
           nix-build -A ${{ inputs.package_name }} --arg pkgs 'import <nixpkgs> { config.allowUnfree = true; }' 2>&1 | tee build.log
 
       - name: Check build result
-        if: steps.compare.outputs.comparison == '-1'
+        if: steps.compare.outputs.comparison == '-1' || (steps.compare.outputs.comparison == '0' && steps.check_hash.outputs.needs_update == 'true')
         run: |
           if [ "${{ steps.build.outcome }}" != "success" ]; then
             echo "::error::Build failed for ${{ inputs.display_name }} ${{ steps.latest.outputs.version }}"
@@ -130,11 +151,18 @@ jobs:
           fi
 
       - name: Commit and push
-        if: steps.compare.outputs.comparison == '-1' && steps.build.outcome == 'success'
+        if: (steps.compare.outputs.comparison == '-1' || (steps.compare.outputs.comparison == '0' && steps.check_hash.outputs.needs_update == 'true')) && steps.build.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add ${{ inputs.package_path }}
 
-          git commit -m "chore: update ${{ inputs.display_name }} ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          # Determine commit message based on what changed
+          if [ "${{ steps.compare.outputs.comparison }}" = "-1" ]; then
+            COMMIT_MSG="chore: update ${{ inputs.display_name }} ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          else
+            COMMIT_MSG="fix: correct SHA256 hash for ${{ inputs.display_name }} ${{ steps.latest.outputs.version }}"
+          fi
+
+          git commit -m "$COMMIT_MSG"
           git push
