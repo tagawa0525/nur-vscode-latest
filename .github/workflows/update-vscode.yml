@@ -1,125 +1,17 @@
-name: Update VSCode and Extensions
+name: Update VSCode
 
 on:
   schedule:
-    # 毎日UTC 22:30（日本時間7:30）に実行
+    # Run daily at UTC 22:30 (JST 7:30)
     - cron: '30 22 * * *'
-  workflow_dispatch: # 手動実行も可能
-
-permissions:
-  contents: write
+  workflow_dispatch: # Manual execution allowed
 
 jobs:
   update:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v26
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-          extra_nix_config: |
-            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-
-      - name: Get current VSCode version
-        id: current
-        run: |
-          CURRENT_VERSION=$(grep 'version = ' pkgs/vscode/default.nix | sed 's/.*version = "\(.*\)";/\1/')
-          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "Current VSCode: $CURRENT_VERSION"
-
-      - name: Get latest VSCode version from Microsoft API
-        id: vscode
-        run: |
-          # Microsoft公式APIから最新版のメタデータを取得（バージョン、SHA256ハッシュを含む）
-          METADATA=$(curl -fsSL 'https://update.code.visualstudio.com/api/update/linux-x64/stable/latest')
-
-          VERSION=$(echo "$METADATA" | jq -r '.productVersion')
-          SHA256_HEX=$(echo "$METADATA" | jq -r '.sha256hash')
-
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "sha256_hex=$SHA256_HEX" >> $GITHUB_OUTPUT
-          echo "Latest VSCode: $VERSION"
-          echo "SHA256 (hex): $SHA256_HEX"
-
-      - name: Compare versions
-        id: compare
-        run: |
-          CURRENT="${{ steps.current.outputs.version }}"
-          NEW="${{ steps.vscode.outputs.version }}"
-
-          # セマンティックバージョン比較
-          # -1: CURRENT < NEW (アップグレード)
-          #  0: CURRENT = NEW (同じ)
-          #  1: CURRENT > NEW (ダウングレード)
-          COMPARISON=$(echo "$CURRENT $NEW" | awk '{
-            split($1, a, /[.]/); split($2, b, /[.]/);
-            for(i=1; i<=3; i++) {
-              if(a[i] < b[i]) { print "-1"; exit }
-              if(a[i] > b[i]) { print "1"; exit }
-            }
-            print "0"
-          }')
-
-          echo "comparison=$COMPARISON" >> $GITHUB_OUTPUT
-
-          if [ "$COMPARISON" = "0" ]; then
-            echo "::notice::Version $NEW is already up-to-date"
-            exit 0
-          elif [ "$COMPARISON" = "1" ]; then
-            echo "::warning::Version $NEW appears to be a downgrade from $CURRENT"
-            exit 1
-          else
-            echo "::notice::Upgrading from $CURRENT to $NEW"
-          fi
-
-      - name: Convert SHA256 to Nix base32 format
-        if: steps.compare.outputs.comparison == '-1'
-        id: hash
-        run: |
-          # 既に取得したhex形式のSHA256をNixのBase32形式に変換
-          SHA256=$(nix --extra-experimental-features nix-command hash convert --hash-algo sha256 --to nix32 "${{ steps.vscode.outputs.sha256_hex }}")
-
-          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
-          echo "SHA256 (base32): $SHA256"
-
-      - name: Update version in default.nix
-        if: steps.compare.outputs.comparison == '-1'
-        run: |
-          sed -i 's/version = ".*";/version = "${{ steps.vscode.outputs.version }}";/' pkgs/vscode/default.nix
-          sed -i 's/sha256 = ".*";/sha256 = "${{ steps.hash.outputs.sha256 }}";/' pkgs/vscode/default.nix
-
-      - name: Build package (test)
-        if: steps.compare.outputs.comparison == '-1'
-        id: build
-        continue-on-error: true
-        run: |
-          # ビルドテストを実行する理由:
-          # 1. Microsoft APIから取得したSHA256ハッシュが正しいことを検証
-          # 2. Nixパッケージ定義の構文エラーや依存関係の問題を早期発見
-          # 3. 壊れたパッケージがコミットされることを防ぐ
-          nix-build -A vscode --arg pkgs 'import <nixpkgs> { config.allowUnfree = true; }' 2>&1 | tee build.log
-
-      - name: Check build result
-        if: steps.compare.outputs.comparison == '-1'
-        run: |
-          if [ "${{ steps.build.outcome }}" != "success" ]; then
-            echo "::error::Build failed for VSCode ${{ steps.vscode.outputs.version }}"
-            echo "::group::Build log (last 50 lines)"
-            tail -n 50 build.log
-            echo "::endgroup::"
-            exit 1
-          else
-            echo "::notice::Build succeeded for VSCode ${{ steps.vscode.outputs.version }}"
-          fi
-
-      - name: Commit and push
-        if: steps.compare.outputs.comparison == '-1' && steps.build.outcome == 'success'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pkgs/vscode/default.nix
-
-          git commit -m "chore: update VSCode ${{ steps.current.outputs.version }} -> ${{ steps.vscode.outputs.version }}"
-          git push
+    uses: ./.github/workflows/_update-vscode-template.yml
+    with:
+      edition: stable
+      package_path: pkgs/vscode/default.nix
+      package_name: vscode
+      api_channel: stable
+      display_name: VSCode
