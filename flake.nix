@@ -1,5 +1,5 @@
 {
-  description = "tagawa's NUR packages";
+  description = "NUR providing latest VSCode versions with daily auto-updates";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -16,7 +16,5 @@
           pkgs = import nixpkgs { inherit system; config.allowUnfree = true; };
         }
       );
-
-      overlays = import ./overlays;
     };
 }

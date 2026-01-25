@@ -30,8 +30,8 @@
 }:
 
 let
-  # VSCode最新版のメタデータを取得するスクリプト
-  # Microsoft公式APIから最新のstableバージョン情報を取得
+  # Platform-specific configuration for VSCode stable
+  # Version info is fetched from Microsoft's official API
   inherit (stdenv.hostPlatform) system;
   plat = {
     x86_64-linux = "linux-x64";
@@ -39,7 +39,7 @@ let
     armv7l-linux = "linux-armhf";
   }.${system};
 
-  # 最新版の情報（GitHub Actionsで自動更新される）
+  # Latest version info (auto-updated by GitHub Actions)
   version = "1.108.2";
   sha256 = "0p8v4q5c63jw0kk4wd6zl8n0071iljr6wjmbbvknbjrsmdxmm826";
 

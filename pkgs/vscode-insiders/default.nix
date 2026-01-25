@@ -30,8 +30,8 @@
 }:
 
 let
-  # VSCode Insiders最新版のメタデータ
-  # Microsoft公式APIから最新のinsiderバージョン情報を取得
+  # Platform-specific configuration for VSCode Insiders
+  # Version info is fetched from Microsoft's official API
   inherit (stdenv.hostPlatform) system;
   plat = {
     x86_64-linux = "linux-x64";
@@ -39,7 +39,7 @@ let
     armv7l-linux = "linux-armhf";
   }.${system};
 
-  # 最新版の情報（GitHub Actionsで自動更新される予定）
+  # Latest version info (auto-updated by GitHub Actions)
   version = "1.109.0-insider";
   sha256 = "0nd6y7s0h0sx0c03i49ipm4spn2zlfiw24di5v7m53jgr1nmwdrq";
 

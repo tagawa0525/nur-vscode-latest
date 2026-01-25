@@ -1,17 +1,8 @@
-# =============================================================================
-# 個人NURリポジトリ
-# =============================================================================
-# VSCodeなど常に最新版を使いたいパッケージを提供
-# =============================================================================
+# nur-vscode-latest
+# NUR providing latest VSCode versions with daily auto-updates
 { pkgs ? import <nixpkgs> { } }:
 
 {
-  # モジュールとライブラリ（必須）
-  lib = import ./lib { inherit pkgs; };
-  modules = import ./modules;
-  overlays = import ./overlays;
-
-  # パッケージ
   vscode = pkgs.callPackage ./pkgs/vscode { };
   vscode-insiders = pkgs.callPackage ./pkgs/vscode-insiders { };
 }
