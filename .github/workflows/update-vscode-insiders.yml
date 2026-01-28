@@ -2,8 +2,10 @@ name: Update VSCode Insiders
 
 on:
   schedule:
-    # Run daily at UTC 23:00 (JST 8:00), 30 minutes after stable
-    - cron: '0 23 * * *'
+    # Run every 4 hours (6 times daily) - Insiders builds are released 2-3 times per day
+    # Based on actual release data: intervals range from 3-14 hours (avg ~9 hours)
+    # UTC 3:00, 7:00, 11:00, 15:00, 19:00, 23:00
+    - cron: '0 3,7,11,15,19,23 * * *'
   workflow_dispatch: # Manual execution allowed
 
 permissions:
