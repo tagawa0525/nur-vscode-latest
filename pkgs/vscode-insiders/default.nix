@@ -24,7 +24,6 @@
 , libkrb5
 , webkitgtk_4_1
 , imagemagick
-, asar
 , bash
 , ripgrep
 }:
@@ -108,7 +107,6 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [
     imagemagick
     autoPatchelfHook
-    asar
     copyDesktopItems
     # override doesn't preserve splicing https://github.com/NixOS/nixpkgs/issues/132651
     (buildPackages.wrapGAppsHook3.override { makeWrapper = buildPackages.makeShellWrapper; })
@@ -139,21 +137,23 @@ stdenv.mkDerivation rec {
   dontBuild = true;
   dontConfigure = true;
 
-  # Fix "Save as Root" functionality
+  # VSCode 1.122+ unpacks most of node_modules at source level; node_modules.asar
+  # only contains vsda (signature library) and must be left alone for it to load.
   postPatch = ''
-    packed="resources/app/node_modules.asar"
-    unpacked="resources/app/node_modules"
-    asar extract "$packed" "$unpacked"
-    substituteInPlace $unpacked/@vscode/sudo-prompt/index.js \
+    # Fix "Save as Root" functionality (sudo-prompt pkexec/bash paths)
+    substituteInPlace resources/app/node_modules/@vscode/sudo-prompt/index.js \
       --replace-fail "/usr/bin/pkexec" "/run/wrappers/bin/pkexec" \
       --replace-fail "/bin/bash" "${bash}/bin/bash"
-    rm -rf "$packed"
-    ln -rs "$unpacked" "$packed"
 
-    # Use nixpkgs ripgrep instead of bundled one
-    chmod +x resources/app/node_modules/@vscode/ripgrep/bin/rg
-    rm resources/app/node_modules/@vscode/ripgrep/bin/rg
-    ln -s ${ripgrep}/bin/rg resources/app/node_modules/@vscode/ripgrep/bin/rg
+    # Use nixpkgs ripgrep instead of the bundled one. 1.122+ renamed the package
+    # to ripgrep-universal and moved the binary under an arch-specific subdir.
+    rgPath="resources/app/node_modules/@vscode/ripgrep-universal/bin/${plat}/rg"
+    rm "$rgPath"
+    ln -s ${ripgrep}/bin/rg "$rgPath"
+
+    # Drop the musl-libc Copilot agent (used by Alpine/musl distros).
+    # It cannot be autoPatchelf'd against glibc and is never loaded on NixOS.
+    rm -rf resources/app/node_modules/@github/copilot-linuxmusl-x64
   '';
 
   installPhase = ''
