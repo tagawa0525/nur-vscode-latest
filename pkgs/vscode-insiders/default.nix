@@ -20,7 +20,7 @@
 , nss
 , systemd
 , wayland
-, xorg
+, libxkbfile
 , libkrb5
 , webkitgtk_4_1
 , imagemagick
@@ -123,7 +123,7 @@ stdenv.mkDerivation rec {
     nspr
     systemdLibs
     webkitgtk_4_1
-    xorg.libxkbfile
+    libxkbfile
   ];
 
   runtimeDependencies = [
