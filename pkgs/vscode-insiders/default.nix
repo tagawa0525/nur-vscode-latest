@@ -26,6 +26,10 @@
 , imagemagick
 , bash
 , ripgrep
+, libXtst
+, libjpeg8
+, pipewire
+, libei
 }:
 
 let
@@ -124,6 +128,11 @@ stdenv.mkDerivation rec {
     systemdLibs
     webkitgtk_4_1
     libxkbfile
+    # GitHub Copilot computer-use prebuild (computer.node) native deps
+    libXtst
+    libjpeg8
+    (lib.getLib pipewire) # only libpipewire-0.3.so.0 is needed, not the daemons
+    libei
   ];
 
   runtimeDependencies = [
