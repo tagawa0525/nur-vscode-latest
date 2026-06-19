@@ -43,8 +43,8 @@ let
   }.${system};
 
   # Latest version info (auto-updated by GitHub Actions)
-  version = "1.125.0";
-  sha256 = "0kvz65d2af17x1vp01kd1fpbhpkgdvnysnvbrfd6fkx2j0gaafsd";
+  version = "1.125.1";
+  sha256 = "08xj59z01svajf5hbls1djpgh2ga12asnq01zc4i9slqz07dd78i";
 
   executableName = "code";
   longName = "Visual Studio Code";
