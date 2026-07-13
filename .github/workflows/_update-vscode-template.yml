@@ -87,8 +87,9 @@ jobs:
           echo "comparison=$COMPARISON" >> $GITHUB_OUTPUT
 
           if [ "$COMPARISON" = "1" ]; then
-            echo "::warning::Version $NEW appears to be a downgrade from $CURRENT"
-            exit 1
+            # Microsoft occasionally pulls a broken release and rolls the
+            # channel back; follow the rollback instead of failing
+            echo "::warning::Upstream rollback detected: downgrading from $CURRENT to $NEW"
           elif [ "$COMPARISON" = "-1" ]; then
             echo "::notice::Upgrading from $CURRENT to $NEW"
           else
@@ -115,7 +116,7 @@ jobs:
           fi
 
       - name: Convert SHA256 to Nix base32 format
-        if: steps.compare.outputs.comparison == '-1' || (steps.compare.outputs.comparison == '0' && steps.check_hash.outputs.needs_update == 'true')
+        if: steps.compare.outputs.comparison != '0' || steps.check_hash.outputs.needs_update == 'true'
         id: hash
         run: |
           # Convert hex SHA256 to Nix base32 format
@@ -125,13 +126,13 @@ jobs:
           echo "SHA256 (base32): $SHA256"
 
       - name: Update version in default.nix
-        if: steps.compare.outputs.comparison == '-1' || (steps.compare.outputs.comparison == '0' && steps.check_hash.outputs.needs_update == 'true')
+        if: steps.compare.outputs.comparison != '0' || steps.check_hash.outputs.needs_update == 'true'
         run: |
           sed -i 's/version = ".*";/version = "${{ steps.latest.outputs.version }}";/' ${{ inputs.package_path }}
           sed -i 's/sha256 = ".*";/sha256 = "${{ steps.hash.outputs.sha256 }}";/' ${{ inputs.package_path }}
 
       - name: Build package (test)
-        if: steps.compare.outputs.comparison == '-1' || (steps.compare.outputs.comparison == '0' && steps.check_hash.outputs.needs_update == 'true')
+        if: steps.compare.outputs.comparison != '0' || steps.check_hash.outputs.needs_update == 'true'
         id: build
         continue-on-error: true
         run: |
@@ -142,7 +143,7 @@ jobs:
           nix-build -A ${{ inputs.package_name }} --arg pkgs 'import <nixpkgs> { config.allowUnfree = true; }' 2>&1 | tee build.log
 
       - name: Check build result
-        if: steps.compare.outputs.comparison == '-1' || (steps.compare.outputs.comparison == '0' && steps.check_hash.outputs.needs_update == 'true')
+        if: steps.compare.outputs.comparison != '0' || steps.check_hash.outputs.needs_update == 'true'
         run: |
           if [ "${{ steps.build.outcome }}" != "success" ]; then
             echo "::error::Build failed for ${{ inputs.display_name }} ${{ steps.latest.outputs.version }}"
@@ -155,7 +156,7 @@ jobs:
           fi
 
       - name: Commit and push
-        if: (steps.compare.outputs.comparison == '-1' || (steps.compare.outputs.comparison == '0' && steps.check_hash.outputs.needs_update == 'true')) && steps.build.outcome == 'success'
+        if: (steps.compare.outputs.comparison != '0' || steps.check_hash.outputs.needs_update == 'true') && steps.build.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -164,6 +165,8 @@ jobs:
           # Determine commit message based on what changed
           if [ "${{ steps.compare.outputs.comparison }}" = "-1" ]; then
             COMMIT_MSG="chore: update ${{ inputs.display_name }} ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          elif [ "${{ steps.compare.outputs.comparison }}" = "1" ]; then
+            COMMIT_MSG="chore: downgrade ${{ inputs.display_name }} ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }} (upstream rollback)"
           else
             COMMIT_MSG="fix: correct SHA256 hash for ${{ inputs.display_name }} ${{ steps.latest.outputs.version }}"
           fi
