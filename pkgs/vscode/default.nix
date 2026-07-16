@@ -1,46 +1,48 @@
-{ lib
-, stdenv
-, fetchurl
-, coreutils
-, gnugrep
-, copyDesktopItems
-, makeDesktopItem
-, autoPatchelfHook
-, buildPackages
-, alsa-lib
-, at-spi2-atk
-, fontconfig
-, glib
-, libdbusmenu
-, libsecret
-, libXScrnSaver
-, libxshmfence
-, libglvnd
-, nspr
-, nss
-, systemd
-, wayland
-, libxkbfile
-, libkrb5
-, webkitgtk_4_1
-, imagemagick
-, bash
-, ripgrep
-, libXtst
-, libjpeg8
-, pipewire
-, libei
+{
+  lib,
+  stdenv,
+  fetchurl,
+  coreutils,
+  gnugrep,
+  copyDesktopItems,
+  makeDesktopItem,
+  autoPatchelfHook,
+  buildPackages,
+  alsa-lib,
+  at-spi2-atk,
+  fontconfig,
+  glib,
+  libdbusmenu,
+  libsecret,
+  libXScrnSaver,
+  libxshmfence,
+  libglvnd,
+  nspr,
+  nss,
+  systemd,
+  wayland,
+  libxkbfile,
+  libkrb5,
+  webkitgtk_4_1,
+  imagemagick,
+  ripgrep,
+  libXtst,
+  libjpeg8,
+  pipewire,
+  libei,
 }:
 
 let
   # Platform-specific configuration for VSCode stable
   # Version info is fetched from Microsoft's official API
   inherit (stdenv.hostPlatform) system;
-  plat = {
-    x86_64-linux = "linux-x64";
-    aarch64-linux = "linux-arm64";
-    armv7l-linux = "linux-armhf";
-  }.${system};
+  plat =
+    {
+      x86_64-linux = "linux-x64";
+      aarch64-linux = "linux-arm64";
+      armv7l-linux = "linux-armhf";
+    }
+    .${system};
 
   # Latest version info (auto-updated by GitHub Actions)
   version = "1.129.0";
@@ -146,23 +148,16 @@ stdenv.mkDerivation rec {
   dontBuild = true;
   dontConfigure = true;
 
-  # VSCode 1.122+ unpacks most of node_modules at source level; node_modules.asar
-  # only contains vsda (signature library) and must be left alone for it to load.
+  # VSCode 1.129+ repacked node_modules into node_modules.asar; native binaries
+  # live under node_modules.asar.unpacked. The asar itself must be left alone
+  # for the loader to find its contents.
+  # @vscode/sudo-prompt (the old "Save as Root" pkexec patch target) and the
+  # musl-libc Copilot agent were removed upstream in 1.129.
   postPatch = ''
-    # Fix "Save as Root" functionality (sudo-prompt pkexec/bash paths)
-    substituteInPlace resources/app/node_modules/@vscode/sudo-prompt/index.js \
-      --replace-fail "/usr/bin/pkexec" "/run/wrappers/bin/pkexec" \
-      --replace-fail "/bin/bash" "${bash}/bin/bash"
-
-    # Use nixpkgs ripgrep instead of the bundled one. 1.122+ renamed the package
-    # to ripgrep-universal and moved the binary under an arch-specific subdir.
-    rgPath="resources/app/node_modules/@vscode/ripgrep-universal/bin/${plat}/rg"
+    # Use nixpkgs ripgrep instead of the bundled one
+    rgPath="resources/app/node_modules.asar.unpacked/@vscode/ripgrep-universal/bin/${plat}/rg"
     rm "$rgPath"
     ln -s ${ripgrep}/bin/rg "$rgPath"
-
-    # Drop the musl-libc Copilot agent (used by Alpine/musl distros).
-    # It cannot be autoPatchelf'd against glibc and is never loaded on NixOS.
-    rm -rf resources/app/node_modules/@github/copilot-linuxmusl-x64
   '';
 
   installPhase = ''
@@ -195,7 +190,13 @@ stdenv.mkDerivation rec {
   preFixup = ''
     gappsWrapperArgs+=(
       --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ libdbusmenu ]}
-      --prefix PATH : ${lib.makeBinPath [ glib gnugrep coreutils ]}
+      --prefix PATH : ${
+        lib.makeBinPath [
+          glib
+          gnugrep
+          coreutils
+        ]
+      }
       --set-default ELECTRON_OZONE_PLATFORM_HINT "\''${NIXOS_OZONE_WL:+\''${WAYLAND_DISPLAY:+auto}}"
     )
   '';
@@ -212,7 +213,11 @@ stdenv.mkDerivation rec {
     description = "Visual Studio Code - latest version";
     homepage = "https://code.visualstudio.com/";
     license = licenses.unfree;
-    platforms = [ "x86_64-linux" "aarch64-linux" "armv7l-linux" ];
+    platforms = [
+      "x86_64-linux"
+      "aarch64-linux"
+      "armv7l-linux"
+    ];
     mainProgram = "code";
   };
 }
