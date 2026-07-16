@@ -25,7 +25,6 @@
   libkrb5,
   webkitgtk_4_1,
   imagemagick,
-  bash,
   ripgrep,
   libXtst,
   libjpeg8,
@@ -155,23 +154,16 @@ stdenv.mkDerivation rec {
   dontBuild = true;
   dontConfigure = true;
 
-  # VSCode 1.122+ unpacks most of node_modules at source level; node_modules.asar
-  # only contains vsda (signature library) and must be left alone for it to load.
+  # VSCode 1.129+ repacked node_modules into node_modules.asar; native binaries
+  # live under node_modules.asar.unpacked. The asar itself must be left alone
+  # for the loader to find its contents.
+  # @vscode/sudo-prompt (the old "Save as Root" pkexec patch target) and the
+  # musl-libc Copilot agent were removed upstream in 1.129.
   postPatch = ''
-    # Fix "Save as Root" functionality (sudo-prompt pkexec/bash paths)
-    substituteInPlace resources/app/node_modules/@vscode/sudo-prompt/index.js \
-      --replace-fail "/usr/bin/pkexec" "/run/wrappers/bin/pkexec" \
-      --replace-fail "/bin/bash" "${bash}/bin/bash"
-
-    # Use nixpkgs ripgrep instead of the bundled one. 1.122+ renamed the package
-    # to ripgrep-universal and moved the binary under an arch-specific subdir.
-    rgPath="resources/app/node_modules/@vscode/ripgrep-universal/bin/${plat}/rg"
+    # Use nixpkgs ripgrep instead of the bundled one
+    rgPath="resources/app/node_modules.asar.unpacked/@vscode/ripgrep-universal/bin/${plat}/rg"
     rm "$rgPath"
     ln -s ${ripgrep}/bin/rg "$rgPath"
-
-    # Drop the musl-libc Copilot agent (used by Alpine/musl distros).
-    # It cannot be autoPatchelf'd against glibc and is never loaded on NixOS.
-    rm -rf resources/app/node_modules/@github/copilot-linuxmusl-x64
   '';
 
   installPhase = ''
