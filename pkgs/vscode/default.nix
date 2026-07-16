@@ -1,46 +1,49 @@
-{ lib
-, stdenv
-, fetchurl
-, coreutils
-, gnugrep
-, copyDesktopItems
-, makeDesktopItem
-, autoPatchelfHook
-, buildPackages
-, alsa-lib
-, at-spi2-atk
-, fontconfig
-, glib
-, libdbusmenu
-, libsecret
-, libXScrnSaver
-, libxshmfence
-, libglvnd
-, nspr
-, nss
-, systemd
-, wayland
-, libxkbfile
-, libkrb5
-, webkitgtk_4_1
-, imagemagick
-, bash
-, ripgrep
-, libXtst
-, libjpeg8
-, pipewire
-, libei
+{
+  lib,
+  stdenv,
+  fetchurl,
+  coreutils,
+  gnugrep,
+  copyDesktopItems,
+  makeDesktopItem,
+  autoPatchelfHook,
+  buildPackages,
+  alsa-lib,
+  at-spi2-atk,
+  fontconfig,
+  glib,
+  libdbusmenu,
+  libsecret,
+  libXScrnSaver,
+  libxshmfence,
+  libglvnd,
+  nspr,
+  nss,
+  systemd,
+  wayland,
+  libxkbfile,
+  libkrb5,
+  webkitgtk_4_1,
+  imagemagick,
+  bash,
+  ripgrep,
+  libXtst,
+  libjpeg8,
+  pipewire,
+  libei,
 }:
 
 let
   # Platform-specific configuration for VSCode stable
   # Version info is fetched from Microsoft's official API
   inherit (stdenv.hostPlatform) system;
-  plat = {
-    x86_64-linux = "linux-x64";
-    aarch64-linux = "linux-arm64";
-    armv7l-linux = "linux-armhf";
-  }.${system};
+  plat =
+    {
+      x86_64-linux = "linux-x64";
+      aarch64-linux = "linux-arm64";
+      armv7l-linux = "linux-armhf";
+    }
+    .${system};
 
   # Latest version info (auto-updated by GitHub Actions)
   version = "1.129.0";
@@ -195,7 +198,13 @@ stdenv.mkDerivation rec {
   preFixup = ''
     gappsWrapperArgs+=(
       --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ libdbusmenu ]}
-      --prefix PATH : ${lib.makeBinPath [ glib gnugrep coreutils ]}
+      --prefix PATH : ${
+        lib.makeBinPath [
+          glib
+          gnugrep
+          coreutils
+        ]
+      }
       --set-default ELECTRON_OZONE_PLATFORM_HINT "\''${NIXOS_OZONE_WL:+\''${WAYLAND_DISPLAY:+auto}}"
     )
   '';
@@ -212,7 +221,11 @@ stdenv.mkDerivation rec {
     description = "Visual Studio Code - latest version";
     homepage = "https://code.visualstudio.com/";
     license = licenses.unfree;
-    platforms = [ "x86_64-linux" "aarch64-linux" "armv7l-linux" ];
+    platforms = [
+      "x86_64-linux"
+      "aarch64-linux"
+      "armv7l-linux"
+    ];
     mainProgram = "code";
   };
 }
