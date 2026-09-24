@@ -46,7 +46,7 @@ let
 
   # Latest version info (auto-updated by GitHub Actions)
   version = "1.140.0-insider";
-  sha256 = "0lmr0v1hkj7kvbi524a74562mlfxckl93ccnrjrbq0fr08hwv49y";
+  sha256 = "0bxv1jwx3414k28xqd6agkwhzcq3dwcx21b64h6f9kk4bk5lsgi5";
 
   executableName = "code-insiders";
   longName = "Visual Studio Code - Insiders";
