@@ -44,8 +44,8 @@ jobs:
       - name: Get current version
         id: current
         run: |
-          CURRENT_VERSION=$(jq -r .version ${{ inputs.sources_path }})
-          CURRENT_COMMIT=$(jq -r .commit ${{ inputs.sources_path }})
+          CURRENT_VERSION=$(jq -er .version ${{ inputs.sources_path }})
+          CURRENT_COMMIT=$(jq -er .commit ${{ inputs.sources_path }})
           echo "version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "commit=$CURRENT_COMMIT" >> "$GITHUB_OUTPUT"
           echo "Current ${{ inputs.display_name }}: $CURRENT_VERSION"
@@ -61,8 +61,15 @@ jobs:
           BUILDS=()
           for SYSTEM in "${!PLATS[@]}"; do
             METADATA=$(curl -fsSL "https://update.code.visualstudio.com/api/update/${PLATS[$SYSTEM]}/${{ inputs.api_channel }}/latest")
-            BUILDS+=("$(echo "$METADATA" | jq -r '.productVersion + " " + .version')")
-            HASH=$(nix --extra-experimental-features nix-command hash convert --hash-algo sha256 --to sri "$(echo "$METADATA" | jq -r '.sha256hash')")
+            # -e fails on a missing field instead of passing "null" or "" on
+            VERSION=$(echo "$METADATA" | jq -er '.productVersion')
+            COMMIT=$(echo "$METADATA" | jq -er '.version')
+            if ! [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::$SYSTEM: the API returned a commit that is not a 40-hex SHA: $COMMIT"
+              exit 1
+            fi
+            BUILDS+=("$VERSION $COMMIT")
+            HASH=$(nix --extra-experimental-features nix-command hash convert --hash-algo sha256 --to sri "$(echo "$METADATA" | jq -er '.sha256hash')")
             HASHES=$(echo "$HASHES" | jq --arg s "$SYSTEM" --arg h "$HASH" '. + {($s): $h}')
             echo "$SYSTEM: ${BUILDS[-1]} $HASH"
           done
