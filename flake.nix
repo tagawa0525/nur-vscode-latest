@@ -25,6 +25,9 @@
       ];
     in
     {
+      # nixpkgs の vscode と vscode-insiders を、このリポジトリのものに置き換える
+      overlays.default = final: _prev: import ./default.nix { pkgs = final; };
+
       packages = forAllSystems (system: import ./default.nix { pkgs = pkgsFor system; });
 
       checks = forAllSystems (
