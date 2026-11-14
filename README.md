@@ -51,15 +51,13 @@ The packages are built with nixpkgs' `buildVscode`, so nixpkgs' fixes for VS Cod
 
 ### With the overlay
 
-`overlays.default` replaces `vscode` and `vscode-insiders` in your `pkgs`, so modules that take `pkgs.vscode` (Home Manager's `programs.vscode`, for example) use these packages:
+`overlays.default` replaces `vscode` and adds `vscode-insiders` (nixpkgs has none) in your `pkgs`, so modules that take `pkgs.vscode` (Home Manager's `programs.vscode`, for example) use these packages:
 
 ```nix
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     nur-vscode-latest.url = "github:tagawa0525/nur-vscode-latest";
-    # Build with your nixpkgs, whose buildVscode must handle the VS Code release
-    nur-vscode-latest.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = { nixpkgs, nur-vscode-latest, ... }: {
@@ -78,7 +76,7 @@ The packages are built with nixpkgs' `buildVscode`, so nixpkgs' fixes for VS Cod
 }
 ```
 
-The overlay replaces the packages only on the supported platforms below, and leaves nixpkgs' `vscode` on other systems. It needs a nixpkgs that has `buildVscode` and handles the current VS Code layout (recent nixos-unstable). `default.nix` has the same requirement.
+The overlay replaces the packages only on the supported platforms below, and leaves nixpkgs' `vscode` on other systems. It builds with your `pkgs` (not this flake's locked nixpkgs), so your nixpkgs needs `buildVscode` and handles the current VS Code layout (recent nixos-unstable). `default.nix` has the same requirement.
 
 ### With Home Manager (Flakes)
 
