@@ -1,5 +1,5 @@
 {
-  description = "NUR providing latest VSCode versions with daily auto-updates";
+  description = "Latest VS Code versions for Nix, auto-updated via GitHub Actions";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -25,6 +25,15 @@
       ];
     in
     {
+      # nixpkgs の vscode と vscode-insiders を、このリポジトリのものに置き換える
+      # 対応しないシステムでは nixpkgs のものを残す（置き換えると評価で Unsupported system になる）。条件は prev で見る
+      # （final で見ると、この overlay の属性の名前を決めるのに final が要り、無限に再帰する）
+      overlays.default =
+        final: prev:
+        nixpkgs.lib.optionalAttrs (builtins.elem prev.stdenv.hostPlatform.system systems) (
+          import ./default.nix { pkgs = final; }
+        );
+
       packages = forAllSystems (system: import ./default.nix { pkgs = pkgsFor system; });
 
       checks = forAllSystems (
@@ -80,8 +89,59 @@
                 [ "$found" -gt 0 ]
                 touch $out
               '';
+
+          # overlay を当てた nixpkgs の vscode が、このリポジトリの版になること
+          overlayReplacesNixpkgs =
+            name:
+            let
+              overlaid = import nixpkgs {
+                inherit system;
+                config.allowUnfree = true;
+                overlays = [ self.overlays.default ];
+              };
+            in
+            # version だけで比べると、nixpkgs が同じ版に追いついたときに overlay が効かなくても通る
+            pkgs.runCommand "${name}-overlay-replaces-nixpkgs" { } (
+              if overlaid.${name}.drvPath == self.packages.${system}.${name}.drvPath then
+                "touch $out"
+              else
+                ''
+                  echo "overlay の ${name} は ${overlaid.${name}.version}（このリポジトリは ${
+                    self.packages.${system}.${name}.version
+                  }）" >&2
+                  exit 1
+                ''
+            );
+
+          # 対応しないシステム（aarch64-darwin）では、overlay が nixpkgs の vscode を残すこと
+          overlayKeepsUnsupportedSystems =
+            let
+              darwin = "aarch64-darwin";
+              plain = import nixpkgs {
+                system = darwin;
+                config.allowUnfree = true;
+              };
+              overlaid = import nixpkgs {
+                system = darwin;
+                config.allowUnfree = true;
+                overlays = [ self.overlays.default ];
+              };
+              kept = builtins.tryEval (overlaid.vscode.drvPath == plain.vscode.drvPath);
+            in
+            pkgs.runCommand "overlay-keeps-unsupported-systems" { } (
+              if kept.success && kept.value then
+                "touch $out"
+              else
+                ''
+                  echo "overlay が ${darwin} の vscode を置き換えた（評価が通らないか、nixpkgs のものと違う）" >&2
+                  exit 1
+                ''
+            );
         in
-        lib.listToAttrs (
+        {
+          overlay-keeps-unsupported-systems = overlayKeepsUnsupportedSystems;
+        }
+        // lib.listToAttrs (
           lib.concatMap (
             name:
             let
@@ -91,6 +151,7 @@
               (lib.nameValuePair "${name}-src-hash-per-system" (srcHashesPerSystem name))
               (lib.nameValuePair "${name}-save-as-root-uses-wrapper" (saveAsRootUsesWrapper name pkg))
               (lib.nameValuePair "${name}-copilot-runtime-finds-openssl" (copilotRuntimeFindsOpenssl name pkg))
+              (lib.nameValuePair "${name}-overlay-replaces-nixpkgs" (overlayReplacesNixpkgs name))
             ]
           ) editions
         )

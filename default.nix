@@ -1,6 +1,8 @@
 # nur-vscode-latest
-# NUR providing latest VSCode versions with daily auto-updates
-{ pkgs ? import <nixpkgs> { } }:
+# Latest VS Code versions for Nix, auto-updated via GitHub Actions
+{
+  pkgs ? import <nixpkgs> { },
+}:
 
 {
   vscode = pkgs.callPackage ./pkgs/vscode { };
