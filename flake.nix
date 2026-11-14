@@ -26,7 +26,13 @@
     in
     {
       # nixpkgs の vscode と vscode-insiders を、このリポジトリのものに置き換える
-      overlays.default = final: _prev: import ./default.nix { pkgs = final; };
+      # 対応しないシステムでは nixpkgs のものを残す（置き換えると評価で Unsupported system になる）。条件は prev で見る
+      # （final で見ると、この overlay の属性の名前を決めるのに final が要り、無限に再帰する）
+      overlays.default =
+        final: prev:
+        nixpkgs.lib.optionalAttrs (builtins.elem prev.stdenv.hostPlatform.system systems) (
+          import ./default.nix { pkgs = final; }
+        );
 
       packages = forAllSystems (system: import ./default.nix { pkgs = pkgsFor system; });
 
