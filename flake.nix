@@ -1,5 +1,5 @@
 {
-  description = "NUR providing latest VSCode versions with daily auto-updates";
+  description = "Latest VS Code versions for Nix, auto-updated via GitHub Actions";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
