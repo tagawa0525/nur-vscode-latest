@@ -60,17 +60,6 @@ jobs:
           git add flake.lock
           git commit -m "chore: update flake.lock"
 
-          # Push with retry logic to handle concurrent workflow conflicts
-          MAX_RETRIES=3
-          for i in $(seq 1 "$MAX_RETRIES"); do
-            if git push; then
-              echo "::notice::Push succeeded on attempt $i"
-              break
-            fi
-            if [ "$i" -eq "$MAX_RETRIES" ]; then
-              echo "::error::Push failed after $MAX_RETRIES attempts"
-              exit 1
-            fi
-            echo "::warning::Push failed on attempt $i, retrying with rebase..."
-            git pull --rebase
-          done
+          # No rebase-and-retry: a rebased lock would be pushed untested on top of
+          # whatever landed meanwhile. A rejected push fails; next week's run retries
+          git push
