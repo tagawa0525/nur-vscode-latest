@@ -4,7 +4,7 @@ date: 2026-11-14
 requires: []
 supersedes: []
 superseded-by:
-issues: ["#11", "#12", "#14"]
+issues: ["#11", "#12", "#13", "#14"]
 ---
 
 # ADR-0001: VS Code の derivation を自前で書かず、nixpkgs の buildVscode に version と src を渡して作る
@@ -46,8 +46,9 @@ nixpkgs 版に無かったのは、同梱の Copilot の `runtime.node` が dlop
 
 nixpkgs に無い #10 の libssl の RUNPATH は、`buildVscode` の結果に `overrideAttrs` で `postFixup` を足して続ける。
 
-バージョンとアーキテクチャごとのハッシュは、版ごとの `sources.json` に置き、自動更新のワークフローは jq で書き換える
-（Nix の式を sed で書き換えるより、キーを取り違えない）。ハッシュはアーキテクチャごとに Microsoft の API から取る。
+バージョン、ビルドの commit、アーキテクチャごとのハッシュは、版ごとの `sources.json` に置き、自動更新のワークフローは
+jq で書き換える（Nix の式を sed で書き換えるより、キーを取り違えない）。commit とハッシュは Microsoft の API から取る。
+src の URL は、stable と insiders のどちらも `commit:<sha>` の形でビルドの commit に固定する。
 
 ### 帰結
 
@@ -62,13 +63,24 @@ nixpkgs に無い #10 の libssl の RUNPATH は、`buildVscode` の結果に `o
   ハッシュと `systems` を足す
 - armv7l-linux は出さない。flake の `systems` に無く、どの check も見ないまま、armhf の API の遅れで x86_64 と aarch64 の
   更新を止めるため（前のハッシュは x64 のもので、もとから壊れていた）
-- insiders の src の URL が版に固定されていない問題（#13）は、この決定と別に直す
+- 新しいビルドが届く速さは、どちらの URL の形でもワークフローの間隔で決まる。`latest` の URL は、ワークフローがハッシュを
+  書き換えるまで固定したハッシュと合わずにビルドが落ちていた（insiders で 371 回のハッシュの修正のコミット）。commit の
+  URL は、前のビルドを取れ続ける（2026-11-14 に、`api/commits/insider/linux-x64` の 200 件の最後の commit も取れた）
 
 ### 確認
 
 - `nix flake check` の checks で、「Save as Root」の pkexec のパスが書き換わっていること、Copilot の `runtime.node` の
-  RUNPATH に openssl があること、アーキテクチャごとに src のハッシュが違うことを確かめる
+  RUNPATH に openssl があること、アーキテクチャごとに src のハッシュが違うこと、src の URL が commit で固定されていることを
+  確かめる。`sources.json` の commit が 40 桁の 16 進数でなければ、`pkgs/build-vscode-latest.nix` の assert が評価で止める
 - `vsce-sign` の libssl は、`generic.nix` が `--add-needed` で足す（`hasVsceSign`）。こちらは `runtime.node` にだけ足し、
   x86_64 と aarch64 で `runtime.node` が見つからなければビルドを止める
 - 自動更新のワークフローは、版を上げる前に x86_64 で上の checks をビルドする。aarch64 はビルドせず、ハッシュは Microsoft の
   API の値を使う
+
+## 変更
+
+- 2026-11-14: src の URL をビルドの commit で固定した。前は「バージョンとアーキテクチャごとのハッシュは、版ごとの
+  `sources.json` に置き、自動更新のワークフローは jq で書き換える（Nix の式を sed で書き換えるより、キーを取り違えない）。
+  ハッシュはアーキテクチャごとに Microsoft の API から取る。」で、URL は stable が版、insiders が `latest` だった。insiders は
+  同じ版のまま 1 日に何回もビルドを出すので、`latest` の中身が固定したハッシュと食い違った（#13）。stable は同じ版の中身を
+  差し替えないが、URL の形と更新の判定を 1 つにするため揃えた

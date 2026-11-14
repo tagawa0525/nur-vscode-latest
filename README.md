@@ -121,9 +121,9 @@ nix run .#vscode
 GitHub Actions workflows run daily to:
 
 1. Fetch the latest version metadata from Microsoft's official API
-2. Compare with the current version in the repository
-3. If a new version is available:
-   - Update the version and SHA256 hash
+2. Compare with `sources.json` in the repository (version, build commit and hashes)
+3. If anything differs (a new version, a new build of the same version, or a corrected hash):
+   - Update the version, the build commit (the download URL is pinned by it) and the per-architecture SHA256 hashes
    - Build the package to verify correctness
    - Commit and push the changes
 
@@ -131,10 +131,10 @@ A weekly workflow also updates `flake.lock` (nixpkgs), and commits it only when 
 
 ### Schedule
 
-| Package         | Check Time (UTC) | Check Time (JST) |
-| --------------- | ---------------- | ---------------- |
-| VSCode (stable) | 22:30            | 07:30            |
-| VSCode Insiders | 22:40            | 07:40            |
+| Package         | Check Time (UTC)                         | Check Time (JST)                         |
+| --------------- | ---------------------------------------- | ---------------------------------------- |
+| VSCode (stable) | 22:30                                    | 07:30                                    |
+| VSCode Insiders | 03:00, 07:00, 11:00, 15:00, 19:00, 23:00 | 12:00, 16:00, 20:00, 00:00, 04:00, 08:00 |
 
 ## Supported Platforms
 
