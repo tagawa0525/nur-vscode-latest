@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       sources_path:
-        description: 'Path to the package sources.json (version and per-system hashes)'
+        description: 'Path to the package sources.json (version, build commit and per-system hashes)'
         required: true
         type: string
       package_name:

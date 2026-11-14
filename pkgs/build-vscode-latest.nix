@@ -1,4 +1,4 @@
-# nixpkgs の buildVscode に、sources.json の版とアーキテクチャごとのハッシュを渡す（ADR-0001）
+# nixpkgs の buildVscode に、sources.json の版、ビルドの commit、アーキテクチャごとのハッシュを渡す（ADR-0001）
 {
   lib,
   stdenv,
@@ -12,7 +12,7 @@
   sources,
 }:
 
-# commit が壊れていれば（jq -r は欠けたキーを "null" にする）、commit:null の URL を取りに行く前に止める
+# commit が壊れていれば（手での編集、API の応答の変化）、commit:null のような URL を取りに行く前に止める
 assert lib.assertMsg (
   builtins.match "[0-9a-f]{40}" sources.commit != null
 ) "sources.json の commit が 40 桁の 16 進数でない: ${sources.commit}";
@@ -42,8 +42,7 @@ let
 
     src = fetchurl {
       name = "VSCode_${version}_${plat}.tar.gz";
-      # latest や版の URL でなく、ビルドの commit で固定する。insiders は同じ版のまま 1 日に何回もビルドを出し、
-      # latest の URL の中身が固定した hash と食い違う（#13）
+      # latest や版の URL にしない。同じ版のまま中身が差し替わると、固定した hash と合わなくなる（ADR-0001 の「変更」）
       url = "https://update.code.visualstudio.com/commit:${sources.commit}/${plat}/${channel}";
       hash = sources.hashes.${system};
     };
