@@ -77,6 +77,20 @@
             '';
 
           # 同梱の Copilot の SDK の runtime.node が dlopen する libssl を見つけられること（#10）
+          # src の URL をビルドの commit で固定すること（#13）。latest や版の URL は、同じ版のまま中身が差し替わると
+          # 固定した hash と合わなくなる
+          srcPinnedByCommit =
+            name: pkg:
+            pkgs.runCommand "${name}-src-pinned-by-commit" { } (
+              if lib.hasInfix "/commit:" pkg.src.url then
+                "touch $out"
+              else
+                ''
+                  echo "${name} の src の URL が commit で固定されていない: ${pkg.src.url}" >&2
+                  exit 1
+                ''
+            );
+
           copilotRuntimeFindsOpenssl =
             name: pkg:
             pkgs.runCommand "${name}-copilot-runtime-finds-openssl" { nativeBuildInputs = [ pkgs.patchelf ]; }
@@ -152,6 +166,7 @@
               (lib.nameValuePair "${name}-save-as-root-uses-wrapper" (saveAsRootUsesWrapper name pkg))
               (lib.nameValuePair "${name}-copilot-runtime-finds-openssl" (copilotRuntimeFindsOpenssl name pkg))
               (lib.nameValuePair "${name}-overlay-replaces-nixpkgs" (overlayReplacesNixpkgs name))
+              (lib.nameValuePair "${name}-src-pinned-by-commit" (srcPinnedByCommit name pkg))
             ]
           ) editions
         )
