@@ -126,6 +126,8 @@ jobs:
           # 1. Verify the x86_64 SHA256 hash from Microsoft API is correct
           # 2. Detect nixpkgs' buildVscode falling behind a VS Code layout change
           # 3. Prevent broken packages from being committed
+          # The default `bash -e` has no pipefail, so `| tee` would hide a failing build
+          set -o pipefail
           PKG=${{ inputs.package_name }}
           nix build -L --no-link \
             ".#checks.x86_64-linux.$PKG-save-as-root-uses-wrapper" \
