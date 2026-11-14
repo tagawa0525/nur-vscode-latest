@@ -94,8 +94,9 @@
                 overlays = [ self.overlays.default ];
               };
             in
+            # version だけで比べると、nixpkgs が同じ版に追いついたときに overlay が効かなくても通る
             pkgs.runCommand "${name}-overlay-replaces-nixpkgs" { } (
-              if overlaid.${name}.version == self.packages.${system}.${name}.version then
+              if overlaid.${name}.drvPath == self.packages.${system}.${name}.drvPath then
                 "touch $out"
               else
                 ''
