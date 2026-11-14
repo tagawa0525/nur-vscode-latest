@@ -45,7 +45,9 @@ jobs:
         id: current
         run: |
           CURRENT_VERSION=$(jq -r .version ${{ inputs.sources_path }})
+          CURRENT_COMMIT=$(jq -r .commit ${{ inputs.sources_path }})
           echo "version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "commit=$CURRENT_COMMIT" >> "$GITHUB_OUTPUT"
           echo "Current ${{ inputs.display_name }}: $CURRENT_VERSION"
 
       - name: Get latest version and per-system hashes from Microsoft API
@@ -55,28 +57,34 @@ jobs:
           # Only the systems the flake exposes: a lagging endpoint for another one must not hold these back
           declare -A PLATS=([x86_64-linux]=linux-x64 [aarch64-linux]=linux-arm64)
           HASHES='{}'
-          VERSIONS=()
+          # "<version> <commit>" per system; the src URL is pinned by the build commit
+          BUILDS=()
           for SYSTEM in "${!PLATS[@]}"; do
             METADATA=$(curl -fsSL "https://update.code.visualstudio.com/api/update/${PLATS[$SYSTEM]}/${{ inputs.api_channel }}/latest")
-            VERSIONS+=("$(echo "$METADATA" | jq -r '.productVersion')")
+            BUILDS+=("$(echo "$METADATA" | jq -r '.productVersion + " " + .version')")
             HASH=$(nix --extra-experimental-features nix-command hash convert --hash-algo sha256 --to sri "$(echo "$METADATA" | jq -r '.sha256hash')")
             HASHES=$(echo "$HASHES" | jq --arg s "$SYSTEM" --arg h "$HASH" '. + {($s): $h}')
-            echo "$SYSTEM: ${VERSIONS[-1]} $HASH"
+            echo "$SYSTEM: ${BUILDS[-1]} $HASH"
           done
 
-          VERSION=${VERSIONS[0]}
-          for V in "${VERSIONS[@]}"; do
-            if [ "$V" != "$VERSION" ]; then
+          BUILD=${BUILDS[0]}
+          for B in "${BUILDS[@]}"; do
+            if [ "$B" != "$BUILD" ]; then
               # Microsoft publishes the architectures one by one; wait for the next run
-              echo "::warning::Architectures disagree on the latest version (${VERSIONS[*]}); skipping this run"
+              echo "::warning::Architectures disagree on the latest build (${BUILDS[*]}); skipping this run"
               echo "consistent=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
           done
 
-          jq -n --arg v "$VERSION" --argjson h "$HASHES" '{version: $v, hashes: {"x86_64-linux": $h["x86_64-linux"], "aarch64-linux": $h["aarch64-linux"]}}' > sources.new.json
-          echo "consistent=true" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          VERSION=${BUILD% *}
+          COMMIT=${BUILD#* }
+          jq -n --arg v "$VERSION" --arg c "$COMMIT" --argjson h "$HASHES" '{version: $v, commit: $c, hashes: {"x86_64-linux": $h["x86_64-linux"], "aarch64-linux": $h["aarch64-linux"]}}' > sources.new.json
+          {
+            echo "consistent=true"
+            echo "version=$VERSION"
+            echo "commit=$COMMIT"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Compare with current sources
         if: steps.latest.outputs.consistent == 'true'
@@ -94,7 +102,7 @@ jobs:
 
           # Semantic version comparison
           # -1: CURRENT < NEW (upgrade)
-          #  0: CURRENT = NEW (same version, hash changed)
+          #  0: CURRENT = NEW (same version: a new build, or the hash changed)
           #  1: CURRENT > NEW (downgrade)
           COMPARISON=$(echo "$CURRENT $NEW" | awk '{
             split($1, a, /[.-]/); split($2, b, /[.-]/);
@@ -112,8 +120,10 @@ jobs:
             echo "::warning::Upstream rollback detected: downgrading from $CURRENT to $NEW"
           elif [ "$COMPARISON" = "-1" ]; then
             echo "::notice::Upgrading from $CURRENT to $NEW"
+          elif [ "${{ steps.current.outputs.commit }}" != "${{ steps.latest.outputs.commit }}" ]; then
+            echo "::notice::New build of $NEW: ${{ steps.latest.outputs.commit }}"
           else
-            echo "::warning::Hash changed for $NEW"
+            echo "::warning::Hash changed for $NEW at the same commit"
           fi
 
           mv sources.new.json ${{ inputs.sources_path }}
@@ -133,7 +143,8 @@ jobs:
           nix build -L --no-link \
             ".#checks.x86_64-linux.$PKG-save-as-root-uses-wrapper" \
             ".#checks.x86_64-linux.$PKG-copilot-runtime-finds-openssl" \
-            ".#checks.x86_64-linux.$PKG-src-hash-per-system" 2>&1 | tee build.log
+            ".#checks.x86_64-linux.$PKG-src-hash-per-system" \
+            ".#checks.x86_64-linux.$PKG-src-pinned-by-commit" 2>&1 | tee build.log
 
       - name: Check build result
         if: steps.compare.outputs.needs_update == 'true'
@@ -160,6 +171,8 @@ jobs:
             COMMIT_MSG="chore: update ${{ inputs.display_name }} ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }}"
           elif [ "${{ steps.compare.outputs.comparison }}" = "1" ]; then
             COMMIT_MSG="chore: downgrade ${{ inputs.display_name }} ${{ steps.current.outputs.version }} -> ${{ steps.latest.outputs.version }} (upstream rollback)"
+          elif [ "${{ steps.current.outputs.commit }}" != "${{ steps.latest.outputs.commit }}" ]; then
+            COMMIT_MSG="chore: update ${{ inputs.display_name }} ${{ steps.latest.outputs.version }} to build ${{ steps.latest.outputs.commit }}"
           else
             COMMIT_MSG="fix: correct SHA256 hash for ${{ inputs.display_name }} ${{ steps.latest.outputs.version }}"
           fi
