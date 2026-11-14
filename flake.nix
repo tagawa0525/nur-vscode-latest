@@ -76,7 +76,6 @@
               touch $out
             '';
 
-          # 同梱の Copilot の SDK の runtime.node が dlopen する libssl を見つけられること（#10）
           # src の URL をビルドの commit で固定すること（#13）。latest や版の URL は、同じ版のまま中身が差し替わると
           # 固定した hash と合わなくなる
           srcPinnedByCommit =
@@ -91,6 +90,7 @@
                 ''
             );
 
+          # 同梱の Copilot の SDK の runtime.node が dlopen する libssl を見つけられること（#10）
           copilotRuntimeFindsOpenssl =
             name: pkg:
             pkgs.runCommand "${name}-copilot-runtime-finds-openssl" { nativeBuildInputs = [ pkgs.patchelf ]; }
