@@ -106,8 +106,36 @@
                   exit 1
                 ''
             );
+
+          # 対応しないシステム（aarch64-darwin）では、overlay が nixpkgs の vscode を残すこと
+          overlayKeepsUnsupportedSystems =
+            let
+              darwin = "aarch64-darwin";
+              plain = import nixpkgs {
+                system = darwin;
+                config.allowUnfree = true;
+              };
+              overlaid = import nixpkgs {
+                system = darwin;
+                config.allowUnfree = true;
+                overlays = [ self.overlays.default ];
+              };
+              kept = builtins.tryEval (overlaid.vscode.drvPath == plain.vscode.drvPath);
+            in
+            pkgs.runCommand "overlay-keeps-unsupported-systems" { } (
+              if kept.success && kept.value then
+                "touch $out"
+              else
+                ''
+                  echo "overlay が ${darwin} の vscode を置き換えた（評価が通らないか、nixpkgs のものと違う）" >&2
+                  exit 1
+                ''
+            );
         in
-        lib.listToAttrs (
+        {
+          overlay-keeps-unsupported-systems = overlayKeepsUnsupportedSystems;
+        }
+        // lib.listToAttrs (
           lib.concatMap (
             name:
             let
