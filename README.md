@@ -66,14 +66,19 @@ The packages are built with nixpkgs' `buildVscode`, so nixpkgs' fixes for VS Cod
     nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
-        { nixpkgs.overlays = [ nur-vscode-latest.overlays.default ]; }
+        ({ pkgs, ... }: {
+          nixpkgs.overlays = [ nur-vscode-latest.overlays.default ];
+          nixpkgs.config.allowUnfree = true;
+          # pkgs.vscode is now this repository's package
+          environment.systemPackages = [ pkgs.vscode ];
+        })
       ];
     };
   };
 }
 ```
 
-The overlay needs a nixpkgs that has `buildVscode` and handles the current VS Code layout (recent nixos-unstable). `default.nix` has the same requirement.
+The overlay replaces the packages only on the supported platforms below, and leaves nixpkgs' `vscode` on other systems. It needs a nixpkgs that has `buildVscode` and handles the current VS Code layout (recent nixos-unstable). `default.nix` has the same requirement.
 
 ### With Home Manager (Flakes)
 
