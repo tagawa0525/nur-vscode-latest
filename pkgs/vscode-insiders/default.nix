@@ -150,10 +150,13 @@ stdenv.mkDerivation rec {
     libdbusmenu
     wayland
     libsecret
-    # 同梱の Copilot のエージェント（copilot-runtime）は、プロキシの TLS 設定を読むときに libssl.so.3 を dlopen する。
-    # autoPatchelf が Nix の glibc に結び直すので nix-ld の libssl は見えず、無いと MCP とモデルの一覧の取得が失敗する
-    (lib.getLib openssl)
   ];
+
+  # 同梱の Copilot のエージェント（copilot-runtime）が読み込む runtime.node は、プロキシの TLS 設定を読むときに
+  # libssl.so.3 を dlopen する。autoPatchelf が Nix の glibc に結び直すので nix-ld の libssl は見えない。dlopen は
+  # 呼び出し元（runtime.node）の RUNPATH を探し、runtimeDependencies は実行ファイルにしか入らないので、共有ライブラリにも
+  # 入る appendRunpaths で足す
+  appendRunpaths = [ "${lib.getLib openssl}/lib" ];
 
   dontBuild = true;
   dontConfigure = true;
