@@ -90,6 +90,30 @@
                 ''
             );
 
+          # sources.json の commit が 40 桁の 16 進数でなければ、評価で止めること（commit:null の URL を取りに行かない）
+          malformedCommitRejected =
+            let
+              url =
+                builtins.tryEval
+                  (pkgs.callPackage ./pkgs/build-vscode-latest.nix { } {
+                    isInsiders = false;
+                    sources = {
+                      version = "0.0.0";
+                      commit = "null";
+                      hashes.${system} = lib.fakeHash;
+                    };
+                  }).src.url;
+            in
+            pkgs.runCommand "malformed-commit-rejected" { } (
+              if url.success then
+                ''
+                  echo "壊れた commit の sources.json が評価を通った: ${url.value}" >&2
+                  exit 1
+                ''
+              else
+                "touch $out"
+            );
+
           # 同梱の Copilot の SDK の runtime.node が dlopen する libssl を見つけられること（#10）
           copilotRuntimeFindsOpenssl =
             name: pkg:
@@ -154,6 +178,7 @@
         in
         {
           overlay-keeps-unsupported-systems = overlayKeepsUnsupportedSystems;
+          malformed-commit-rejected = malformedCommitRejected;
         }
         // lib.listToAttrs (
           lib.concatMap (
