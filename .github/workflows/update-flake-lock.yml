@@ -44,7 +44,13 @@ jobs:
       - name: Build packages and run the checks (test)
         if: steps.update.outputs.changed == 'true'
         # A failing build leaves the current lock in place; the job fails so it is noticed
-        run: nix flake check -L
+        run: |
+          nix flake check -L
+          # flake check builds only this runner's system; at least evaluate aarch64
+          for PKG in vscode vscode-insiders; do
+            nix eval --raw ".#packages.aarch64-linux.$PKG.drvPath"
+            echo
+          done
 
       - name: Commit and push
         if: steps.update.outputs.changed == 'true'
