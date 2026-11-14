@@ -30,6 +30,7 @@
   libjpeg8,
   pipewire,
   libei,
+  openssl,
 }:
 
 let
@@ -193,7 +194,32 @@ stdenv.mkDerivation rec {
     runHook postInstall
   '';
 
+  # 同梱の Copilot の SDK の runtime.node と vsce-sign は、libssl.so.3 を（NEEDED でなく）実行中に dlopen する。dlopen は
+  # 呼び出し元の RUNPATH を探すので、この 2 つの RUNPATH にだけ足す（比べた方式は #10）。autoPatchelf が RUNPATH を
+  # 書き換えた後に足すよう、postFixupHooks に足す。x86_64 と aarch64 でどちらかが見つからなければ、上流で置き場が
+  # 変わったので止める（毎日の自動更新で黙って元に戻さない）
   preFixup = ''
+    addOpensslRunpath() {
+      local nodes=0 signs=0 f
+      for f in "$out/lib/${libraryName}"/resources/app/node_modules.asar.unpacked/@github/copilot-sdk-linux-*/prebuilds/*/runtime.node; do
+        [ -e "$f" ] || continue
+        patchelf --add-rpath ${lib.getLib openssl}/lib "$f"
+        nodes=$((nodes + 1))
+      done
+      for f in "$out/lib/${libraryName}"/resources/app/node_modules.asar.unpacked/@vscode/vsce-sign/bin/vsce-sign; do
+        [ -e "$f" ] || continue
+        patchelf --add-rpath ${lib.getLib openssl}/lib "$f"
+        signs=$((signs + 1))
+      done
+      ${lib.optionalString (stdenv.hostPlatform.isx86_64 || stdenv.hostPlatform.isAarch64) ''
+        if [ "$nodes" -eq 0 ] || [ "$signs" -eq 0 ]; then
+          echo "libssl を dlopen する部品が見つからない（runtime.node: $nodes 個、vsce-sign: $signs 個。置き場が変わった）" >&2
+          exit 1
+        fi
+      ''}
+    }
+    postFixupHooks+=(addOpensslRunpath)
+
     gappsWrapperArgs+=(
       --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ libdbusmenu ]}
       --prefix PATH : ${
