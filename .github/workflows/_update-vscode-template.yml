@@ -52,7 +52,8 @@ jobs:
         id: latest
         run: |
           # Each architecture is a different tarball with its own hash
-          declare -A PLATS=([x86_64-linux]=linux-x64 [aarch64-linux]=linux-arm64 [armv7l-linux]=linux-armhf)
+          # Only the systems the flake exposes: a lagging endpoint for another one must not hold these back
+          declare -A PLATS=([x86_64-linux]=linux-x64 [aarch64-linux]=linux-arm64)
           HASHES='{}'
           VERSIONS=()
           for SYSTEM in "${!PLATS[@]}"; do
@@ -73,7 +74,7 @@ jobs:
             fi
           done
 
-          jq -n --arg v "$VERSION" --argjson h "$HASHES" '{version: $v, hashes: {"x86_64-linux": $h["x86_64-linux"], "aarch64-linux": $h["aarch64-linux"], "armv7l-linux": $h["armv7l-linux"]}}' > sources.new.json
+          jq -n --arg v "$VERSION" --argjson h "$HASHES" '{version: $v, hashes: {"x86_64-linux": $h["x86_64-linux"], "aarch64-linux": $h["aarch64-linux"]}}' > sources.new.json
           echo "consistent=true" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 

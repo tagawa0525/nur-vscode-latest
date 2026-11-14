@@ -20,7 +20,6 @@ let
     {
       x86_64-linux = "linux-x64";
       aarch64-linux = "linux-arm64";
-      armv7l-linux = "linux-armhf";
     }
     .${system} or (throw "Unsupported system: ${system}");
 

@@ -2,7 +2,6 @@
   "version": "1.147.0-insider",
   "hashes": {
     "x86_64-linux": "sha256-2oTzvzLxbV0x3s4ik9wf/VGYhkJ4KJnlbxJXK4atTJI=",
-    "aarch64-linux": "sha256-BooFfcvSsc67x5MvkvcmVm7c4wHEevNYA5IyL802f9o=",
-    "armv7l-linux": "sha256-xnqLDlFgJCwzoO9pnX6jU/qeWm1ok5E30yGIDmZIfYA="
+    "aarch64-linux": "sha256-BooFfcvSsc67x5MvkvcmVm7c4wHEevNYA5IyL802f9o="
   }
 }

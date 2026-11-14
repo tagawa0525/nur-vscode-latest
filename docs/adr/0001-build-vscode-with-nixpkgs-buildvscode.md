@@ -59,6 +59,8 @@ nixpkgs に無い #10 の libssl の RUNPATH は、`buildVscode` の結果に `o
   更新するまで届かない。lock の更新は手で行っている（#14）
 - Darwin には対応しない（`flake.nix` の `systems` に入れない）。`buildVscode` は Darwin も扱えるので、要るときは
   ハッシュと `systems` を足す
+- armv7l-linux は出さない。flake の `systems` に無く、どの check も見ないまま、armhf の API の遅れで x86_64 と aarch64 の
+  更新を止めるため（前のハッシュは x64 のもので、もとから壊れていた）
 - insiders の src の URL が版に固定されていない問題（#13）は、この決定と別に直す
 
 ### 確認
@@ -67,5 +69,5 @@ nixpkgs に無い #10 の libssl の RUNPATH は、`buildVscode` の結果に `o
   RUNPATH に openssl があること、アーキテクチャごとに src のハッシュが違うことを確かめる
 - `vsce-sign` の libssl は、`generic.nix` が `--add-needed` で足す（`hasVsceSign`）。こちらは `runtime.node` にだけ足し、
   x86_64 と aarch64 で `runtime.node` が見つからなければビルドを止める
-- 自動更新のワークフローは、版を上げる前に x86_64 で上の checks をビルドする。aarch64 と armv7l はビルドせず、ハッシュは
-  Microsoft の API の値を使う
+- 自動更新のワークフローは、版を上げる前に x86_64 で上の checks をビルドする。aarch64 はビルドせず、ハッシュは Microsoft の
+  API の値を使う
