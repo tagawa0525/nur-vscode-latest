@@ -71,7 +71,7 @@ src の URL は、stable と insiders のどちらも `commit:<sha>` の形で�
 
 - `nix flake check` の checks で、「Save as Root」の pkexec のパスが書き換わっていること、Copilot の `runtime.node` の
   RUNPATH に openssl があること、アーキテクチャごとに src のハッシュが違うこと、src の URL が commit で固定されていることを
-  確かめる
+  確かめる。`sources.json` の commit が 40 桁の 16 進数でなければ、`pkgs/build-vscode-latest.nix` の assert が評価で止める
 - `vsce-sign` の libssl は、`generic.nix` が `--add-needed` で足す（`hasVsceSign`）。こちらは `runtime.node` にだけ足し、
   x86_64 と aarch64 で `runtime.node` が見つからなければビルドを止める
 - 自動更新のワークフローは、版を上げる前に x86_64 で上の checks をビルドする。aarch64 はビルドせず、ハッシュは Microsoft の
