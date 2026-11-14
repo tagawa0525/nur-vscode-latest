@@ -1,0 +1,65 @@
+name: Update flake.lock
+
+on:
+  schedule:
+    # Weekly on Monday at UTC 21:00 (JST Tue 6:00), before the daily VSCode updates
+    - cron: '0 21 * * 1'
+  workflow_dispatch: # Manual execution allowed
+
+permissions:
+  contents: write
+
+# Not the VSCode updates' group: GitHub keeps one pending run per group, so this
+# long job would let a later VSCode run cancel an earlier pending one
+concurrency:
+  group: update-flake-lock-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v26
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update flake.lock
+        id: update
+        run: |
+          # The packages use nixpkgs' buildVscode, so its fixes for VS Code's
+          # layout only reach them through a newer locked nixpkgs (ADR-0001)
+          nix flake update
+          if git diff --quiet flake.lock; then
+            echo "::notice::flake.lock is up-to-date"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git diff flake.lock
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build packages and run the checks (test)
+        if: steps.update.outputs.changed == 'true'
+        # A failing build leaves the current lock in place; the job fails so it is noticed
+        run: |
+          nix flake check -L
+          # flake check builds only this runner's system; at least evaluate aarch64
+          for PKG in vscode vscode-insiders; do
+            nix eval --raw ".#packages.aarch64-linux.$PKG.drvPath"
+            echo
+          done
+
+      - name: Commit and push
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add flake.lock
+          git commit -m "chore: update flake.lock"
+
+          # No rebase-and-retry: a rebased lock would be pushed untested on top of
+          # whatever landed meanwhile. A rejected push fails; next week's run retries
+          git push
