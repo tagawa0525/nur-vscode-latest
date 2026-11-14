@@ -26,8 +26,6 @@ let
   suffix = lib.optionalString isInsiders "-insiders";
   executableName = "code" + suffix;
   channel = if isInsiders then "insider" else "stable";
-  # insiders は版を URL に入れられず latest を取るので、同じ版でも中身が差し替わる（#13）
-  urlVersion = if isInsiders then "latest" else version;
 
   vscode = buildVscode {
     pname = "vscode" + suffix;
@@ -39,7 +37,9 @@ let
 
     src = fetchurl {
       name = "VSCode_${version}_${plat}.tar.gz";
-      url = "https://update.code.visualstudio.com/${urlVersion}/${plat}/${channel}";
+      # latest や版の URL でなく、ビルドの commit で固定する。insiders は同じ版のまま 1 日に何回もビルドを出し、
+      # latest の URL の中身が固定した hash と食い違う（#13）
+      url = "https://update.code.visualstudio.com/commit:${sources.commit}/${plat}/${channel}";
       hash = sources.hashes.${system};
     };
     sourceRoot = "";
