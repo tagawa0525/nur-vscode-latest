@@ -7,8 +7,8 @@ on:
         description: 'Edition (stable or insiders)'
         required: true
         type: string
-      package_path:
-        description: 'Path to package default.nix'
+      sources_path:
+        description: 'Path to the package sources.json (version and per-system hashes)'
         required: true
         type: string
       package_name:
@@ -41,39 +41,60 @@ jobs:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get current version and hash
+      - name: Get current version
         id: current
         run: |
-          CURRENT_VERSION=$(grep 'version = ' ${{ inputs.package_path }} | sed 's/.*version = "\(.*\)";/\1/')
-          CURRENT_SHA256=$(grep 'sha256 = ' ${{ inputs.package_path }} | sed 's/.*sha256 = "\(.*\)";/\1/')
-          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          echo "sha256=$CURRENT_SHA256" >> $GITHUB_OUTPUT
+          CURRENT_VERSION=$(jq -r .version ${{ inputs.sources_path }})
+          echo "version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
           echo "Current ${{ inputs.display_name }}: $CURRENT_VERSION"
-          echo "Current SHA256: $CURRENT_SHA256"
 
-      - name: Get latest version from Microsoft API
+      - name: Get latest version and per-system hashes from Microsoft API
         id: latest
         run: |
-          # Fetch latest version metadata from Microsoft official API (includes version and SHA256 hash)
-          METADATA=$(curl -fsSL "https://update.code.visualstudio.com/api/update/linux-x64/${{ inputs.api_channel }}/latest")
+          # Each architecture is a different tarball with its own hash
+          # Only the systems the flake exposes: a lagging endpoint for another one must not hold these back
+          declare -A PLATS=([x86_64-linux]=linux-x64 [aarch64-linux]=linux-arm64)
+          HASHES='{}'
+          VERSIONS=()
+          for SYSTEM in "${!PLATS[@]}"; do
+            METADATA=$(curl -fsSL "https://update.code.visualstudio.com/api/update/${PLATS[$SYSTEM]}/${{ inputs.api_channel }}/latest")
+            VERSIONS+=("$(echo "$METADATA" | jq -r '.productVersion')")
+            HASH=$(nix --extra-experimental-features nix-command hash convert --hash-algo sha256 --to sri "$(echo "$METADATA" | jq -r '.sha256hash')")
+            HASHES=$(echo "$HASHES" | jq --arg s "$SYSTEM" --arg h "$HASH" '. + {($s): $h}')
+            echo "$SYSTEM: ${VERSIONS[-1]} $HASH"
+          done
 
-          VERSION=$(echo "$METADATA" | jq -r '.productVersion')
-          SHA256_HEX=$(echo "$METADATA" | jq -r '.sha256hash')
+          VERSION=${VERSIONS[0]}
+          for V in "${VERSIONS[@]}"; do
+            if [ "$V" != "$VERSION" ]; then
+              # Microsoft publishes the architectures one by one; wait for the next run
+              echo "::warning::Architectures disagree on the latest version (${VERSIONS[*]}); skipping this run"
+              echo "consistent=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "sha256_hex=$SHA256_HEX" >> $GITHUB_OUTPUT
-          echo "Latest ${{ inputs.display_name }}: $VERSION"
-          echo "SHA256 (hex): $SHA256_HEX"
+          jq -n --arg v "$VERSION" --argjson h "$HASHES" '{version: $v, hashes: {"x86_64-linux": $h["x86_64-linux"], "aarch64-linux": $h["aarch64-linux"]}}' > sources.new.json
+          echo "consistent=true" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Compare versions
+      - name: Compare with current sources
+        if: steps.latest.outputs.consistent == 'true'
         id: compare
         run: |
           CURRENT="${{ steps.current.outputs.version }}"
           NEW="${{ steps.latest.outputs.version }}"
 
+          if jq -e --slurpfile new sources.new.json '. == $new[0]' ${{ inputs.sources_path }} > /dev/null; then
+            echo "::notice::${{ inputs.display_name }} $NEW is up-to-date"
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "needs_update=true" >> "$GITHUB_OUTPUT"
+
           # Semantic version comparison
           # -1: CURRENT < NEW (upgrade)
-          #  0: CURRENT = NEW (same)
+          #  0: CURRENT = NEW (same version, hash changed)
           #  1: CURRENT > NEW (downgrade)
           COMPARISON=$(echo "$CURRENT $NEW" | awk '{
             split($1, a, /[.-]/); split($2, b, /[.-]/);
@@ -83,8 +104,7 @@ jobs:
             }
             print "0"
           }')
-
-          echo "comparison=$COMPARISON" >> $GITHUB_OUTPUT
+          echo "comparison=$COMPARISON" >> "$GITHUB_OUTPUT"
 
           if [ "$COMPARISON" = "1" ]; then
             # Microsoft occasionally pulls a broken release and rolls the
@@ -93,57 +113,30 @@ jobs:
           elif [ "$COMPARISON" = "-1" ]; then
             echo "::notice::Upgrading from $CURRENT to $NEW"
           else
-            echo "::notice::Version $NEW is up-to-date, checking hash..."
+            echo "::warning::Hash changed for $NEW"
           fi
 
-      - name: Check hash mismatch
-        if: steps.compare.outputs.comparison == '0'
-        id: check_hash
-        run: |
-          # Convert latest SHA256 to Nix base32 format for comparison
-          LATEST_SHA256=$(nix --extra-experimental-features nix-command hash convert --hash-algo sha256 --to nix32 "${{ steps.latest.outputs.sha256_hex }}")
-          CURRENT_SHA256="${{ steps.current.outputs.sha256 }}"
+          mv sources.new.json ${{ inputs.sources_path }}
 
-          echo "Latest SHA256 (base32): $LATEST_SHA256"
-          echo "Current SHA256 (base32): $CURRENT_SHA256"
-
-          if [ "$LATEST_SHA256" != "$CURRENT_SHA256" ]; then
-            echo "::warning::Hash mismatch detected! Current: $CURRENT_SHA256, Expected: $LATEST_SHA256"
-            echo "needs_update=true" >> $GITHUB_OUTPUT
-          else
-            echo "::notice::Hash is correct, no update needed"
-            echo "needs_update=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Convert SHA256 to Nix base32 format
-        if: steps.compare.outputs.comparison != '0' || steps.check_hash.outputs.needs_update == 'true'
-        id: hash
-        run: |
-          # Convert hex SHA256 to Nix base32 format
-          SHA256=$(nix --extra-experimental-features nix-command hash convert --hash-algo sha256 --to nix32 "${{ steps.latest.outputs.sha256_hex }}")
-
-          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
-          echo "SHA256 (base32): $SHA256"
-
-      - name: Update version in default.nix
-        if: steps.compare.outputs.comparison != '0' || steps.check_hash.outputs.needs_update == 'true'
-        run: |
-          sed -i 's/version = ".*";/version = "${{ steps.latest.outputs.version }}";/' ${{ inputs.package_path }}
-          sed -i 's/sha256 = ".*";/sha256 = "${{ steps.hash.outputs.sha256 }}";/' ${{ inputs.package_path }}
-
-      - name: Build package (test)
-        if: steps.compare.outputs.comparison != '0' || steps.check_hash.outputs.needs_update == 'true'
+      - name: Build package and run its checks (test)
+        if: steps.compare.outputs.needs_update == 'true'
         id: build
         continue-on-error: true
         run: |
           # Run build test to:
-          # 1. Verify SHA256 hash from Microsoft API is correct
-          # 2. Detect syntax errors or dependency issues early
+          # 1. Verify the x86_64 SHA256 hash from Microsoft API is correct
+          # 2. Detect nixpkgs' buildVscode falling behind a VS Code layout change
           # 3. Prevent broken packages from being committed
-          nix-build -A ${{ inputs.package_name }} --arg pkgs 'import <nixpkgs> { config.allowUnfree = true; }' 2>&1 | tee build.log
+          # The default `bash -e` has no pipefail, so `| tee` would hide a failing build
+          set -o pipefail
+          PKG=${{ inputs.package_name }}
+          nix build -L --no-link \
+            ".#checks.x86_64-linux.$PKG-save-as-root-uses-wrapper" \
+            ".#checks.x86_64-linux.$PKG-copilot-runtime-finds-openssl" \
+            ".#checks.x86_64-linux.$PKG-src-hash-per-system" 2>&1 | tee build.log
 
       - name: Check build result
-        if: steps.compare.outputs.comparison != '0' || steps.check_hash.outputs.needs_update == 'true'
+        if: steps.compare.outputs.needs_update == 'true'
         run: |
           if [ "${{ steps.build.outcome }}" != "success" ]; then
             echo "::error::Build failed for ${{ inputs.display_name }} ${{ steps.latest.outputs.version }}"
@@ -156,11 +149,11 @@ jobs:
           fi
 
       - name: Commit and push
-        if: (steps.compare.outputs.comparison != '0' || steps.check_hash.outputs.needs_update == 'true') && steps.build.outcome == 'success'
+        if: steps.compare.outputs.needs_update == 'true' && steps.build.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ${{ inputs.package_path }}
+          git add ${{ inputs.sources_path }}
 
           # Determine commit message based on what changed
           if [ "${{ steps.compare.outputs.comparison }}" = "-1" ]; then
