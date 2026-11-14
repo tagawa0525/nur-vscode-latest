@@ -80,6 +80,28 @@
                 [ "$found" -gt 0 ]
                 touch $out
               '';
+
+          # overlay を当てた nixpkgs の vscode が、このリポジトリの版になること
+          overlayReplacesNixpkgs =
+            name:
+            let
+              overlaid = import nixpkgs {
+                inherit system;
+                config.allowUnfree = true;
+                overlays = [ self.overlays.default ];
+              };
+            in
+            pkgs.runCommand "${name}-overlay-replaces-nixpkgs" { } (
+              if overlaid.${name}.version == self.packages.${system}.${name}.version then
+                "touch $out"
+              else
+                ''
+                  echo "overlay の ${name} は ${overlaid.${name}.version}（このリポジトリは ${
+                    self.packages.${system}.${name}.version
+                  }）" >&2
+                  exit 1
+                ''
+            );
         in
         lib.listToAttrs (
           lib.concatMap (
@@ -91,6 +113,7 @@
               (lib.nameValuePair "${name}-src-hash-per-system" (srcHashesPerSystem name))
               (lib.nameValuePair "${name}-save-as-root-uses-wrapper" (saveAsRootUsesWrapper name pkg))
               (lib.nameValuePair "${name}-copilot-runtime-finds-openssl" (copilotRuntimeFindsOpenssl name pkg))
+              (lib.nameValuePair "${name}-overlay-replaces-nixpkgs" (overlayReplacesNixpkgs name))
             ]
           ) editions
         )
