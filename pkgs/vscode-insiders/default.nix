@@ -194,24 +194,26 @@ stdenv.mkDerivation rec {
     runHook postInstall
   '';
 
-  # 同梱の Copilot のエージェントの runtime.node と vsce-sign は、libssl.so.3 を（NEEDED でなく）実行中に dlopen する
-  # （strings に libssl.so があり、patchelf --print-needed に無い）。autoPatchelf が Nix の glibc に結び直すので nix-ld の
-  # libssl は見えず、dlopen は呼び出し元の RUNPATH を探す。この 2 つの RUNPATH にだけ足す（runtimeDependencies は実行
-  # ファイルにしか入らず、appendRunpaths はすべての ELF の RUNPATH を書き換え、ラッパーの LD_LIBRARY_PATH は子の
-  # プロセスの git などにも漏れる）。autoPatchelf の後に走るよう、postFixupHooks に足す。x86_64 と aarch64 で見つから
-  # なければ、上流で置き場が変わったので止める（毎日の自動更新で黙って元に戻さない。比べた方式は #10）
+  # 同梱の Copilot の SDK の runtime.node と vsce-sign は、libssl.so.3 を（NEEDED でなく）実行中に dlopen する。dlopen は
+  # 呼び出し元の RUNPATH を探すので、この 2 つの RUNPATH にだけ足す（比べた方式は #10）。autoPatchelf が RUNPATH を
+  # 書き換えた後に足すよう、postFixupHooks に足す。x86_64 と aarch64 でどちらかが見つからなければ、上流で置き場が
+  # 変わったので止める（毎日の自動更新で黙って元に戻さない）
   preFixup = ''
     addOpensslRunpath() {
-      local found=0 f
-      for f in "$out/lib/${libraryName}"/resources/app/node_modules.asar.unpacked/@github/copilot-sdk-linux-*/prebuilds/*/runtime.node \
-        "$out/lib/${libraryName}"/resources/app/node_modules.asar.unpacked/@vscode/vsce-sign/bin/vsce-sign; do
+      local nodes=0 signs=0 f
+      for f in "$out/lib/${libraryName}"/resources/app/node_modules.asar.unpacked/@github/copilot-sdk-linux-*/prebuilds/*/runtime.node; do
         [ -e "$f" ] || continue
         patchelf --add-rpath ${lib.getLib openssl}/lib "$f"
-        found=$((found + 1))
+        nodes=$((nodes + 1))
+      done
+      for f in "$out/lib/${libraryName}"/resources/app/node_modules.asar.unpacked/@vscode/vsce-sign/bin/vsce-sign; do
+        [ -e "$f" ] || continue
+        patchelf --add-rpath ${lib.getLib openssl}/lib "$f"
+        signs=$((signs + 1))
       done
       ${lib.optionalString (stdenv.hostPlatform.isx86_64 || stdenv.hostPlatform.isAarch64) ''
-        if [ "$found" -ne 2 ]; then
-          echo "libssl を dlopen する runtime.node と vsce-sign が $found 個しか見つからない（置き場が変わった）" >&2
+        if [ "$nodes" -eq 0 ] || [ "$signs" -eq 0 ]; then
+          echo "libssl を dlopen する部品が見つからない（runtime.node: $nodes 個、vsce-sign: $signs 個。置き場が変わった）" >&2
           exit 1
         fi
       ''}
