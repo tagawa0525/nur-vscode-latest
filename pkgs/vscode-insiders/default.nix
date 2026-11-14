@@ -152,12 +152,6 @@ stdenv.mkDerivation rec {
     libsecret
   ];
 
-  # 同梱の Copilot のエージェント（copilot-runtime）が読み込む runtime.node は、プロキシの TLS 設定を読むときに
-  # libssl.so.3 を dlopen する。autoPatchelf が Nix の glibc に結び直すので nix-ld の libssl は見えない。dlopen は
-  # 呼び出し元（runtime.node）の RUNPATH を探し、runtimeDependencies は実行ファイルにしか入らないので、共有ライブラリにも
-  # 入る appendRunpaths で足す
-  appendRunpaths = [ "${lib.getLib openssl}/lib" ];
-
   dontBuild = true;
   dontConfigure = true;
 
@@ -214,12 +208,33 @@ stdenv.mkDerivation rec {
     )
   '';
 
+  # autoPatchelf は既定では postFixup の後に走り、RUNPATH を書き換えるので、下の runtime.node への追記が消える。
+  # postFixup の中で先に実行する
+  dontAutoPatchelf = true;
+
   postFixup = ''
+    autoPatchelf "$out"
+
     patchelf \
       --add-needed ${libglvnd}/lib/libGLESv2.so.2 \
       --add-needed ${libglvnd}/lib/libGL.so.1 \
       --add-needed ${libglvnd}/lib/libEGL.so.1 \
       $out/lib/${libraryName}/${executableName}
+
+    # 同梱の Copilot のエージェント（copilot-runtime）が読み込む runtime.node は、プロキシの TLS 設定を読むときに
+    # libssl.so.3 を dlopen する。autoPatchelf が Nix の glibc に結び直すので nix-ld の libssl は見えない。dlopen は
+    # 呼び出し元（runtime.node）の RUNPATH を探す。runtimeDependencies は実行ファイルにしか入らず、appendRunpaths は
+    # すべての ELF の RUNPATH（$ORIGIN など）を書き換えるので、runtime.node にだけ足す。見つからなければ、上流で
+    # 置き場が変わったので止める（毎日の自動更新で黙って元に戻さない）
+    nodes=0
+    while IFS= read -r -d "" node; do
+      patchelf --add-rpath ${lib.getLib openssl}/lib "$node"
+      nodes=$((nodes + 1))
+    done < <(find "$out/lib/${libraryName}" -path '*copilot*' -name runtime.node -print0)
+    if [ "$nodes" -eq 0 ]; then
+      echo "Copilot の runtime.node が見つからない（libssl.so.3 の RUNPATH を足せない）" >&2
+      exit 1
+    fi
   '';
 
   meta = with lib; {
