@@ -1,10 +1,10 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-14
 requires: []
 supersedes: []
 superseded-by:
-issues: ["#11", "#12"]
+issues: ["#11", "#12", "#14"]
 ---
 
 # ADR-0001: VS Code の derivation を自前で書かず、nixpkgs の buildVscode に version と src を渡して作る
@@ -55,6 +55,8 @@ nixpkgs に無い #10 の libssl の RUNPATH は、`buildVscode` の結果に `o
   VS Code の配置が変わると、自動更新のビルドが落ち、nixpkgs が追従するまで版が止まる（壊れた版は出さない）。急ぐときは
   `overrideAttrs` で一時的に補う
 - `buildVscode` の引数が nixpkgs で変わると、呼び出しを直す
+- 自動更新のワークフローと `nix build .#vscode` は `flake.lock` の nixpkgs を使うので、`generic.nix` の修正は lock を
+  更新するまで届かない。lock の更新は手で行っている（#14）
 - Darwin には対応しない（`flake.nix` の `systems` に入れない）。`buildVscode` は Darwin も扱えるので、要るときは
   ハッシュと `systems` を足す
 - insiders の src の URL が版に固定されていない問題（#13）は、この決定と別に直す
@@ -65,3 +67,5 @@ nixpkgs に無い #10 の libssl の RUNPATH は、`buildVscode` の結果に `o
   RUNPATH に openssl があること、アーキテクチャごとに src のハッシュが違うことを確かめる
 - `vsce-sign` の libssl は、`generic.nix` が `--add-needed` で足す（`hasVsceSign`）。こちらは `runtime.node` にだけ足し、
   x86_64 と aarch64 で `runtime.node` が見つからなければビルドを止める
+- 自動更新のワークフローは、版を上げる前に x86_64 で上の checks をビルドする。aarch64 と armv7l はビルドせず、ハッシュは
+  Microsoft の API の値を使う
