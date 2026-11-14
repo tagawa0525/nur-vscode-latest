@@ -30,6 +30,7 @@
   libjpeg8,
   pipewire,
   libei,
+  openssl,
 }:
 
 let
@@ -149,6 +150,9 @@ stdenv.mkDerivation rec {
     libdbusmenu
     wayland
     libsecret
+    # 同梱の Copilot のエージェント（copilot-runtime）は、プロキシの TLS 設定を読むときに libssl.so.3 を dlopen する。
+    # autoPatchelf が Nix の glibc に結び直すので nix-ld の libssl は見えず、無いと MCP とモデルの一覧の取得が失敗する
+    (lib.getLib openssl)
   ];
 
   dontBuild = true;
