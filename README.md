@@ -141,4 +141,4 @@ GitHub Actions workflows run daily to:
 
 ## License
 
-The Nix expressions in this repository are MIT licensed. The packages install Microsoft's proprietary VS Code binaries, which are unfree (`meta.license = lib.licenses.unfree`); you need `config.allowUnfree = true` (or an equivalent `allowUnfreePredicate`) to build them. The MIT license does not cover those binaries.
+The Nix expressions in this repository are MIT licensed. The packages install Microsoft's proprietary VS Code binaries, which are unfree (`meta.license = lib.licenses.unfree`). `packages.<system>` is built with this flake's nixpkgs, which already sets `config.allowUnfree = true`. The overlay and `default.nix` build with your `pkgs`, so you need `config.allowUnfree = true` (or an equivalent `allowUnfreePredicate`) there. The MIT license does not cover those binaries.
