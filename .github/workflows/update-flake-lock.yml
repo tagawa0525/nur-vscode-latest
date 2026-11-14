@@ -9,9 +9,10 @@ on:
 permissions:
   contents: write
 
-# Share the group with the VSCode updates so their pushes to main do not race
+# Not the VSCode updates' group: GitHub keeps one pending run per group, so this
+# long job would let a later VSCode run cancel an earlier pending one
 concurrency:
-  group: update-vscode-${{ github.ref }}
+  group: update-flake-lock-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
