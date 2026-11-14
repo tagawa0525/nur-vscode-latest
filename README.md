@@ -127,6 +127,8 @@ GitHub Actions workflows run daily to:
    - Build the package to verify correctness
    - Commit and push the changes
 
+A weekly workflow also updates `flake.lock` (nixpkgs), and commits it only when `nix flake check` passes, so nixpkgs' fixes to `buildVscode` reach the packages. A failing update keeps the current lock.
+
 ### Schedule
 
 | Package         | Check Time (UTC) | Check Time (JST) |
