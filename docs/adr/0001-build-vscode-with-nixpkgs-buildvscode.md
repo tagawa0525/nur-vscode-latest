@@ -56,7 +56,8 @@ nixpkgs に無い #10 の libssl の RUNPATH は、`buildVscode` の結果に `o
   `overrideAttrs` で一時的に補う
 - `buildVscode` の引数が nixpkgs で変わると、呼び出しを直す
 - 自動更新のワークフローと `nix build .#vscode` は `flake.lock` の nixpkgs を使うので、`generic.nix` の修正は lock を
-  更新するまで届かない。lock は `.github/workflows/update-flake-lock.yml` が毎週更新し、`nix flake check` が通ったときだけコミットする（#14）
+  更新するまで届かない。lock は `.github/workflows/update-flake-lock.yml` が毎週更新し、`nix flake check` が通ったときだけ
+  コミットする（#14）
 - Darwin には対応しない（`flake.nix` の `systems` に入れない）。`buildVscode` は Darwin も扱えるので、要るときは
   ハッシュと `systems` を足す
 - armv7l-linux は出さない。flake の `systems` に無く、どの check も見ないまま、armhf の API の遅れで x86_64 と aarch64 の
