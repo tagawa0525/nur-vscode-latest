@@ -12,6 +12,11 @@
   sources,
 }:
 
+# commit が壊れていれば（jq -r は欠けたキーを "null" にする）、commit:null の URL を取りに行く前に止める
+assert lib.assertMsg (
+  builtins.match "[0-9a-f]{40}" sources.commit != null
+) "sources.json の commit が 40 桁の 16 進数でない: ${sources.commit}";
+
 let
   inherit (stdenv.hostPlatform) system;
   inherit (sources) version;
