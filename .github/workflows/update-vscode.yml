@@ -14,7 +14,7 @@ jobs:
     uses: ./.github/workflows/_update-vscode-template.yml
     with:
       edition: stable
-      package_path: pkgs/vscode/default.nix
+      sources_path: pkgs/vscode/sources.json
       package_name: vscode
       api_channel: stable
       display_name: VSCode

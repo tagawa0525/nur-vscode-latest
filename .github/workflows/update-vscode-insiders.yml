@@ -16,7 +16,7 @@ jobs:
     uses: ./.github/workflows/_update-vscode-template.yml
     with:
       edition: insiders
-      package_path: pkgs/vscode-insiders/default.nix
+      sources_path: pkgs/vscode-insiders/sources.json
       package_name: vscode-insiders
       api_channel: insider
       display_name: VSCode Insiders
