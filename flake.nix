@@ -120,7 +120,7 @@
             pkgs.runCommand "${name}-copilot-runtime-finds-openssl" { nativeBuildInputs = [ pkgs.patchelf ]; }
               ''
                 found=0
-                for f in $(find -L ${pkg}/lib -path '*/@github/copilot-sdk-linux-*/prebuilds/*/runtime.node'); do
+                for f in $(find -L ${pkg}/lib \( -path '*/@github/copilot-sdk-linux-*/prebuilds/*/runtime.node' -o -path '*/@github/copilot/sdk/prebuilds/*/runtime.node' \)); do
                   patchelf --print-rpath "$f" | tr : '\n' | grep -qx '${lib.getLib pkgs.openssl}/lib'
                   found=$((found + 1))
                 done
