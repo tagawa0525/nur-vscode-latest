@@ -71,11 +71,13 @@ vscode.overrideAttrs (old: {
   # 同梱の Copilot の SDK の runtime.node は、libssl.so.3 を（NEEDED でなく）実行中に dlopen する。dlopen は呼び出し元の
   # RUNPATH を探すので、runtime.node の RUNPATH にだけ足す（比べた方式は #10。vsce-sign は generic.nix が NEEDED に足す）。
   # postFixup の文字列は autoPatchelf より先に走り、autoPatchelf が RUNPATH を上書きするので、postFixupHooks に足して
-  # 後に実行する。x86_64 と aarch64 で見つからなければ、上流で置き場が変わったので止める（毎日の自動更新で黙って元に戻さない）
+  # 後に実行する。置き場は、stable が node_modules/@github/copilot-sdk-linux-*、insiders 1.148 が
+  # extensions/copilot/node_modules/@github/copilot/sdk の下なので、両方を探す。x86_64 と aarch64 で見つからなければ、上流で置き場が変わったので止める（毎日の自動更新で黙って元に戻さない）
   preFixup = (old.preFixup or "") + ''
     addOpensslRunpath() {
       local nodes=0 f
-      for f in "$out"/lib/vscode/resources/app/node_modules/@github/copilot-sdk-linux-*/prebuilds/*/runtime.node; do
+      for f in "$out"/lib/vscode/resources/app/node_modules/@github/copilot-sdk-linux-*/prebuilds/*/runtime.node \
+        "$out"/lib/vscode/resources/app/extensions/copilot/node_modules/@github/copilot/sdk/prebuilds/*/runtime.node; do
         [ -e "$f" ] || continue
         patchelf --add-rpath ${lib.getLib openssl}/lib "$f"
         nodes=$((nodes + 1))
